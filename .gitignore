@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-*/
+work/
+*.log
+.DS_Store
+Thumbs.db
+HERO99HE-diagnostics*.json
+HERO99HE-light.json
+HERO99HE-Light-Studio-*-win-x64/
+HERO99HE-Light-Studio-*-win-x64.zip

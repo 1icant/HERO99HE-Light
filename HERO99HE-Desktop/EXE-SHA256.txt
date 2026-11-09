@@ -1,0 +1,24 @@
+HERO99HE-Light-Studio-0.2.2-win-x64.zip
+Size: 162432585 bytes
+SHA256: 8269824E38AAE0EDB56F382C0F19EF8ACC3F1FE68D1F4B31060A3F70594583D8
+
+Extracted folder / HERO99HE Light Studio.exe (v0.2.2)
+Size: 249832448 bytes
+SHA256: A079DA075181D4E14EB03D227F6F8A6EC7C09AA7BE7B0FF8665548A0F2FC4316
+Signature: NotSigned (no publisher certificate)
+Keep the entire extracted folder together. Do not run inside the ZIP.
+
+Historical v0.2.1 folder distribution (preserved separately):
+HERO99HE-Light-Studio-0.2.1-win-x64.zip
+Size: 162430218 bytes
+SHA256: A8230F4B26C86238279ED6D707861040C747F82294B1E388DFC302DB9C337CE6
+
+Extracted folder / HERO99HE Light Studio.exe
+Size: 249832448 bytes
+SHA256: C8A1CDCC068884E2953B97CD86F7F32B8E4F0DEFA317F9A9D2B2AA986C89A388
+Signature: NotSigned (no publisher certificate)
+Keep the entire extracted folder together. Do not run inside the ZIP.
+
+Historical v0.2.0 self-extracting EXE (preserved separately):
+Size: 110258300 bytes
+SHA256: B07CDA853BB738B8831325EEB2A87382DE8293954F16AD6D9717D37AA784DB61

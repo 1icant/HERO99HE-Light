@@ -1,0 +1,32 @@
+{
+  "name": "hero99he-light-desktop",
+  "version": "0.2.2",
+  "private": true,
+  "description": "HERO 99HE local lighting studio with background tray operation",
+  "author": "HERO Light Studio",
+  "main": "main.cjs",
+  "scripts": {
+    "prepare-web": "node scripts/sync-web.cjs && node scripts/create-icon.cjs",
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "dist": "electron-builder --dir --win --x64"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "local.hero99he.lightstudio",
+    "productName": "HERO99HE Light Studio",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": { "output": "dist" },
+    "files": ["main.cjs", "preload.cjs", "policy.cjs", "web/**/*", "assets/**/*", "package.json"],
+    "win": {
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false,
+      "requestedExecutionLevel": "asInvoker",
+      "artifactName": "HERO99HE-Light-Studio-${version}-win-x64.exe"
+    }
+  }
+}

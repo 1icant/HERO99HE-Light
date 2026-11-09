@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HERO 99HE · Light Studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='14' fill='%23c5afff'/%3E%3Cpath d='M15 12v24m18-24v24M15 24h18' stroke='%231b1428' stroke-width='5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=0.1.12">
+  <script defer src="layout.js?v=0.1.12"></script>
+  <script defer src="core.js?v=0.1.12"></script>
+  <script defer src="app.js?v=0.1.12"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="logo">H</span><span>HERO <b>99HE</b><small>LIGHT STUDIO <span>v0.1.12</span></small></span></a>
+    <div class="connection"><span id="status" class="status"><i></i>预览模式</span><button id="connect" class="primary">连接键盘 ↗</button><button id="disconnect" hidden>断开</button></div>
+  </header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">MAKE IT YOURS</p><h1>让桌面，有一点不一样。</h1></div><div class="file-actions"><button id="import" class="quiet">导入</button><button id="export" class="quiet">导出</button><button id="diagnostics" class="quiet" title="导出本地诊断报告">诊断报告</button><input id="importFile" type="file" accept=".json,application/json" hidden></div></section>
+    <div class="workspace">
+      <div class="creative">
+        <section class="card canvas-panel">
+          <div class="panel-head"><div class="tabs" role="tablist" aria-label="编辑模式"><button class="tab active" id="tabLive" role="tab" aria-selected="true">灯光预览</button><button class="tab" id="tabStudio" role="tab" aria-selected="false">动画工作台</button></div><span id="previewMode" class="preview-label">实时预览</span></div>
+          <div class="keyboard-wrap"><div id="stripPreview" class="strip-preview" role="img" aria-label="灯带颜色预览"></div><div id="keyboard" class="keyboard" aria-label="HERO 99HE 逐键预览"></div></div>
+          <div class="paint-toolbar"><label class="toggle"><input id="paintMode" type="checkbox"><span class="switch"></span>逐键画笔</label><span id="hoverKey" class="muted small">点击键帽体验灯效</span><button id="clearPaint" class="quiet">清除涂色</button></div>
+          <section id="studioPanel" class="library" hidden><div class="section-head"><h2>灯光时间线</h2><span id="frameCount">0 / 120</span></div><div class="studio-tools"><button id="capture" class="accent">＋ 捕获一帧</button><button id="playStudio">循环预览</button><button id="deleteFrame" class="quiet" disabled>删除帧</button><label class="duration">时长 <input id="frameMs" type="number" min="25" max="5000" step="25" value="100"> ms</label></div><div id="timeline" class="timeline"></div></section>
+        </section>
+        <section id="livePanel" class="card library"><div class="section-head"><h2>灯效模式 <span class="pill">32</span></h2><select id="effectFilter" class="effect-filter" aria-label="筛选灯效"><option value="all">全部灯效</option><option value="flow">流动光效</option><option value="ambient">氛围灯效</option><option value="reactive">按键互动</option></select></div><div id="effects" class="effect-grid"></div></section>
+        <section class="card library"><div class="section-head"><h2>配色灵感 <span class="pill">30</span></h2><input id="presetSearch" type="search" placeholder="搜索配色…" aria-label="搜索配色"></div><div id="presets" class="preset-grid"></div></section>
+      </div>
+      <aside class="settings">
+        <section class="card control-card">
+          <div class="section-head"><h2>键盘灯光</h2><span class="section-dot"></span></div>
+          <div class="control-group"><label for="color">主色 <span id="colorHex">#61DAFB</span></label><div class="color-line"><input id="color" type="color" value="#61dafb" aria-label="主色"><div id="swatches" class="swatches"></div></div><div id="palettePreview" class="palette-preview" aria-label="当前配色"></div></div>
+          <div class="control-group"><label for="brightness">亮度 <output id="brightnessValue">60%</output></label><input id="brightness" type="range" min="0" max="100" value="60"></div>
+          <div class="control-group"><label for="speed">速度 <output id="speedValue">1.0×</output></label><input id="speed" type="range" min="10" max="400" value="100"></div>
+          <div class="control-group inline-control"><label for="bg">底色</label><input id="bg" type="color" value="#050812" aria-label="背景底色"></div>
+          <div class="action-row"><button id="start" class="primary" disabled>开始输出</button><button id="stop" disabled>停止</button></div>
+        </section>
+        <section class="card control-card strip-card">
+          <div class="section-head"><h2>顶部灯带</h2><span class="strip-badge">独立 / 联动</span></div>
+          <div class="control-group"><label for="stripMode">灯带模式</label><select id="stripMode"><optgroup label="独立灯效"><option value="off">不接管 · 保留当前灯效</option><option value="solid">独立纯色</option><option value="breathe">柔和呼吸</option><option value="spectrum">全彩循环</option><option value="palette">配色流转</option><option value="pulse">柔光脉冲</option></optgroup><optgroup label="键盘联动"><option value="follow">联动 · 跟随键盘颜色</option><option value="follow-dominant">联动 · 主色聚焦</option><option value="follow-scan">联动 · 横向追光</option><option value="follow-breathe">联动 · 同色呼吸</option><option value="follow-complement">联动 · 互补映色</option><option value="follow-split">联动 · 左右交融</option><option value="follow-flash">联动 · 击键闪耀</option><option value="react">联动 · 按键余辉</option></optgroup></select></div>
+          <div class="strip-controls"><div><label for="sideColor">灯带颜色</label><input id="sideColor" type="color" value="#00a0ff" aria-label="灯带颜色"></div><div><label for="sideBrightness">灯带亮度 · 1–5 档</label><input id="sideBrightness" type="number" min="1" max="5" value="3" aria-label="灯带亮度档位，非灯珠数量" title="独立亮度，不受按键亮度影响；5档最亮"></div></div>
+          <div class="control-group"><label for="sideGain">鲜亮增强 <output id="sideGainValue">100%</output></label><input id="sideGain" type="range" min="100" max="200" step="5" value="100" title="提亮偏暗 RGB，不改变硬件亮度上限"></div>
+          <button id="applySideLight" class="accent wide" disabled>应用灯带</button>
+          <p id="sideResult" class="small muted" role="status">可独立应用；偏暗时可试 5 档 + 鲜亮增强。</p>
+        </section>
+        <details class="card more-settings"><summary>更多设置</summary><div class="control-group"><label for="fps">按键帧率上限 <output id="fpsValue">20 FPS</output></label><input id="fps" type="range" min="5" max="40" value="20"></div><button id="inspectLighting" class="wide" disabled>检查灯带连接</button><p class="small muted">灯带亮度独立调节。按键触发仅在网页有焦点时有效；停止不自动恢复原厂灯效。</p></details>
+      </aside>
+    </div>
+    <footer><span>HERO LIGHT STUDIO · 独立灯光工具</span><span>本地保存 · 无云端上传</span></footer>
+    <div hidden aria-hidden="true"><span id="backgroundState"></span><span id="outputLoad"></span><span id="sentFrames"></span><span id="actualFps"></span><span id="sentPackets"></span><span id="stripOutput"></span><span id="lightingCapabilities"></span><span id="lastLog"></span><pre id="log"></pre></div>
+  </main>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
