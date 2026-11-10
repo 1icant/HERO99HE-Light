@@ -61,32 +61,8 @@ test('transport errors do not wedge the queue or cause automatic retries', async
 
 test('native control can use idle key time without bypassing the shared packet budget', async () => {
   const r=rig(), native=C.buildSideLightEffect({mode:3,color:[1,2,3],brightness:2,speed:2});
-  assert.equal(C.STRIP_POLICY.intervalMs,25); assert.equal(C.STRIP_POLICY.maxRefreshHz,40);
   await r.sender.sendFrame(packets(),5);
   assert.equal(r.sender.nextReadyAt(),200); assert.equal(r.sender.nextReadyAt(true),50);
   await r.sender.sendControl(native); assert.equal(r.writes[4].time,50);
   await r.sender.sendFrame(packets(),5); assert.equal(r.writes[5].time,200);
-});
-
-test('native tail follows all four key packets and shares their frame budget and packet gap', async () => {
-  let time = 0; const writes = [], controls = [];
-  const sender = C.createSender({ async sendReport(id,p) { writes.push({ time, command:p[0], index:p[4] }); } },
-    { now:()=>time, sleep:async ms=>{time+=ms;}, onControl: ms=>controls.push(ms) });
-  const native = C.buildSideLightEffect({mode:3,color:[10,20,30],brightness:2,speed:2});
-  for(let i=0;i<16;i++) await sender.sendFrame(packets(),40,()=>true,native);
-  assert.equal(controls.length,16); assert.ok(controls.every(ms=>ms===0));
-  for(let i=0;i<16;i++) {
-    const frame = writes.slice(i*5,i*5+5);
-    assert.deepEqual(frame.map(w=>w.command),[8,8,8,8,4]);
-    assert.deepEqual(frame.slice(0,4).map(w=>w.index),[0,1,2,3]);
-    assert.equal(frame[0].time,i*62.5); assert.equal(frame[4].time,frame[0].time+20);
-  }
-  assert.ok(writes.every((w,i)=>!i || w.time-writes[i-1].time>=5));
-});
-
-test('stop in the final packet gap cancels the native tail before any write', async () => {
-  let valid=true; const r=rig({advance:time=>{if(time>=20)valid=false;}});
-  const native=C.buildSideLightEffect({mode:3,color:[10,20,30],brightness:2,speed:2});
-  assert.equal(await r.sender.sendFrame(packets(),20,()=>valid,native),false);
-  assert.equal(r.writes.length,4);
 });

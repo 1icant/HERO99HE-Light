@@ -3,6 +3,46 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../core.js'), keys = require('../layout.js');
+
+test('Logo migration defaults to no control and validates a defensive four-level configuration',()=>{
+  const old=C.defaultProject();delete old.logo;const p=C.validateProject(old,keys);assert.equal(p.logo.mode,'off');
+  for(const change of [p=>p.logo.mode='unknown',p=>p.logo.brightness=5,p=>p.logo.brightness=-1,p=>p.logo.brightness='2',p=>p.logo.color=[256,0,0]]){
+    const bad=C.defaultProject();change(bad);assert.throws(()=>C.validateProject(bad,keys));
+  }
+  p.logo={mode:'follow-strip',color:[1,2,3],brightness:4};const clean=C.validateProject(p,keys);assert.equal(clean.logo.mode,'solid');p.logo.color[0]=9;assert.deepEqual(clean.logo.color,[1,2,3]);
+  assert.deepEqual(C.validateProject(JSON.parse(JSON.stringify(clean)),keys).logo,clean.logo);
+});
+
+test('all Logo modes use only 04/0B constant RGB and keep native zero-off distinct from no-control',()=>{
+  const p=C.defaultProject(),events=[{t:0.5,x:keys[30].x,y:keys[30].y}];p.settings.brightness=0;
+  const frame=C.render(p,keys,0.7,events),strip={color:[99,80,40]};assert.equal(C.LOGO_MODES.length,5);
+  for(const mode of C.LOGO_MODES){
+    p.logo={mode,color:[255,160,80],brightness:4};const a=C.renderLogo(p,frame,0.7,events,keys,strip);
+    if(mode==='off'){assert.equal(a,null);continue;}
+    const packet=C.buildLogoLightEffect(a);assert.deepEqual([...packet.slice(0,8)],[4,11,0,1,0,7,3,0]);assert.equal(packet[11],4);
+    assert.equal((9+packet.reduce((sum,n)=>sum+n,0))&255,255);
+  }
+  p.logo.mode='solid';assert.deepEqual(C.renderLogo(p,frame,0,[],keys).color,[255,160,80]);
+  p.logo.brightness=0;assert.deepEqual(C.renderLogo(p,frame,0,[],keys),{mode:3,color:[0,0,0],brightness:0,speed:2});
+});
+
+test('single LED fast modes use current main color and a hard 160ms flash, never spatial averaging',()=>{
+  const p=C.defaultProject();p.settings.color=[240,80,30];p.settings.brightness=0;p.logo={mode:'follow-color',color:[0,0,255],brightness:3};
+  assert.deepEqual(C.renderLogo(p,{},1,[],keys).color,[240,80,30]);
+  p.logo.mode='keyflash';const event={t:1,x:0,y:0};
+  assert.deepEqual(C.renderLogo(p,{},1,[event],keys).color,[240,80,30]);assert.deepEqual(C.renderLogo(p,{},1.159,[event],keys).color,[240,80,30]);
+  assert.deepEqual(C.renderLogo(p,{},1.161,[event],keys).color,[0,0,0]);assert.deepEqual(C.renderLogo(p,{},0.9,[event],keys).color,[0,0,0]);
+  assert.equal(C.renderLogo(p,{},1,[event],keys).brightness,3);
+});
+
+test('all removed continuous Logo modes migrate to static without losing the rest of a scene',()=>{
+  const removed=['breathe','spectrum','palette','pulse','react','follow','follow-dominant','follow-scan','follow-breathe','follow-complement','follow-split','follow-flash','follow-strip'];
+  assert.deepEqual(C.LOGO_MODES,['off','solid','follow-color','keyflash','auto-color']);assert.equal(removed.length,13);
+  for(const mode of removed){const p=C.defaultProject();p.logo={mode,color:[123,45,67],brightness:3};p.paint[43]=[20,40,80];
+    const saved=JSON.stringify(p),out=C.validateProject(p,keys);assert.equal(JSON.stringify(p),saved);assert.deepEqual(out.logo,{mode:'solid',color:[123,45,67],brightness:3});assert.deepEqual(out.paint,p.paint);assert.deepEqual(out.strip,p.strip);assert.deepEqual(out.settings,p.settings);
+  }
+});
+
 test('all new effects and presets are deterministic, complete and fit the existing output budget', () => {
   for (const preset of C.PRESETS) for (const effect of C.EFFECTS.slice(8)) {
     const p = C.defaultProject(); Object.assign(p.settings, { effect, color: [...preset.color], bg: [...preset.bg], palette: preset.palette.map(c => [...c]) });
@@ -15,48 +55,6 @@ test('all new effects and presets are deterministic, complete and fit the existi
     }
   }
 });
-test('reactive key afterglow and strip react to the same event, then decay', () => {
-  const p = C.defaultProject(); p.settings.effect = 'keyfade'; p.strip.mode = 'react'; p.settings.brightness = 1;
-  const key = keys[30], events = [{ t: 1, x: key.x, y: key.y }];
-  const hit = C.render(p, keys, 1, events), later = C.render(p, keys, 3.1, events);
-  assert.deepEqual(hit[key.id], p.settings.color); assert.deepEqual(later[key.id], p.settings.bg);
-  assert.deepEqual(C.renderStrip(p, hit, 1, events).color, p.settings.color);
-  assert.deepEqual(C.renderStrip(p, later, 3.1, events).color, p.settings.bg);
-});
-test('follow strip uses prepared color composition and paint, independently of key brightness', () => {
-  const p = C.defaultProject(); p.settings.effect = 'static'; p.settings.color = [100,80,60]; p.settings.brightness = 0.5; p.strip.mode = 'follow';
-  const frame = C.prepareOutput(C.render(p, keys, 0, [], {}, false), keys).frame;
-  assert.deepEqual(C.renderStrip(p, frame, 0).color, [100,80,60]);
-  p.paint[keys[0].id] = [255,0,0];
-  const painted = C.prepareOutput(C.render(p, keys, 0, [], {}, false), keys).frame, mean = [0,1,2].map(a => C.byte(Object.values(painted).reduce((n,c) => n+c[a],0) / keys.length));
-  assert.deepEqual(C.renderStrip(p, painted, 0).color, mean);
-});
-
-test('strip modes retain full RGB at maximum hardware brightness regardless of key brightness', () => {
-  const p=C.defaultProject(); p.strip.brightness=4; p.strip.color=[255,160,80];
-  for(const mode of C.STRIP_MODES.filter(m=>m!=='off')) {
-    p.strip.mode=mode;
-    const results=[0,0.2,0.6,1].map(brightness=>{
-      p.settings.brightness=brightness;
-      const frame=C.prepareOutput(C.render(p,keys,0.7,[],{},false),keys).frame;
-      return C.renderStrip(p,frame,0.7,[{t:0.7,x:0,y:0}]);
-    });
-    for(const result of results) assert.deepEqual(result,results[0],mode+' must not inherit key dimming');
-    const packet=C.buildSideLightEffect(results[0]); assert.equal(packet[11],4); assert.equal(packet[12],2);
-  }
-  p.strip.mode='solid'; p.settings.brightness=0.1;
-  assert.deepEqual(C.renderStrip(p,{},0).color,[255,160,80]);
-});
-test('every strip mode produces only the proven native constant color command; off does nothing', () => {
-  const p = C.defaultProject(), frame = C.render(p, keys, 0);
-  for (const mode of C.STRIP_MODES) {
-    p.strip.mode = mode;
-    const a = C.renderStrip(p, frame, 0.5, [{ t: 0.3, x: 0, y: 0 }]);
-    if (mode === 'off') { assert.equal(a, null); continue; }
-    const packet = C.buildSideLightEffect(a); assert.deepEqual([...packet.slice(0,8)], [4,6,0,1,0,7,3,0]);
-    assert.ok(a.color.every(n => Number.isInteger(n) && n >= 0 && n <= 255));
-  }
-});
 test('old configuration migrates with strip off; invalid imported modes, palette or brightness are rejected', () => {
   const old = C.defaultProject(); delete old.strip; delete old.settings.palette;
   const migrated = C.validateProject(old, keys); assert.equal(migrated.strip.mode, 'off'); assert.equal(migrated.settings.palette.length, 2);
@@ -64,72 +62,41 @@ test('old configuration migrates with strip off; invalid imported modes, palette
     const p = C.defaultProject(); change(p); assert.throws(() => C.validateProject(p, keys));
   }
 });
-test('sixteen added effects have distinct output, animate and survive configuration export/import', () => {
+test('forty additional effects are distinct and survive configuration export/import', () => {
   const signatures = new Set(), p = C.defaultProject(), key = keys[30], events = [{ t: 0.65, x: key.x, y: key.y }];
-  assert.equal(C.EFFECTS.length, 32); assert.equal(C.PRESETS.length, 30);
+  assert.equal(C.EFFECTS.length, 56); assert.equal(new Set(C.EFFECTS).size,56); assert.equal(C.PRESETS.length, 30);
   for (const effect of C.EFFECTS.slice(16)) {
     p.settings.effect = effect;
     const a = C.render(p, keys, 0.7, events), b = C.render(p, keys, 1.3, events);
-    assert.notDeepEqual(a, b, effect + ' changes with time or event age');
+    if(C.isAnimated(p,-1,0.7,events))assert.notDeepEqual(a,b,effect+' changes with time or event age');
+    else assert.deepEqual(a,b,effect+' stays static');
     const signature = JSON.stringify([a,b]); assert.ok(!signatures.has(signature), effect + ' is not a renamed duplicate'); signatures.add(signature);
     const imported = C.validateProject(JSON.parse(JSON.stringify(p)), keys); assert.equal(imported.settings.effect, effect);
   }
 });
-
-test('linked palette fits three packets for every effect and preserves source scenes and true black', () => {
-  for(const effect of C.EFFECTS)for(let i=0;i<12;i++){
-    const p=C.defaultProject();p.settings.effect=effect;
-    const frame=C.render(p,keys,i*0.137,[{t:0,x:keys[30].x,y:keys[30].y}]),saved=JSON.stringify(frame);
-    frame[keys[0].id]=[0,0,0];
-    const before=JSON.stringify(frame),out=C.prepareOutput(frame,keys,C.LINK_POLICY);
-    assert.ok(out.packets.length<=3);assert.equal(JSON.stringify(frame),before);assert.deepEqual(out.frame[keys[0].id],[0,0,0]);
-    for(const packet of out.packets)assert.equal((9+packet.reduce((a,b)=>a+b,0))&255,255);
-    assert.ok(saved.length>0);
+test('new reactive effects rest when no events are live and do not redraw indefinitely',()=>{
+  const p=C.defaultProject(),key=keys[34],events=[{t:1,x:key.x,y:key.y}];
+  for(const [effect,,category] of C.EXTRA_EFFECTS){
+    if(category!=='reactive')continue;
+    p.settings.effect=effect;
+    const idle=C.render(p,keys,0);
+    assert.ok(C.REACTIVE_EFFECTS.has(effect));
+    assert.deepEqual(C.render(p,keys,0.5,events),idle);
+    assert.notDeepEqual(C.render(p,keys,1,events),idle);
+    assert.deepEqual(C.render(p,keys,3.21,events),idle);
+    assert.equal(C.isAnimated(p,-1,3.21,events),false);
   }
-  const crowded=Object.fromEntries(keys.map((k,i)=>[k.id,i<60?[250,0,0]:[i*2,255-i,i]]));
-  assert.ok(C.prepareOutput(crowded,keys,C.LINK_POLICY).packets.length<=3,'large color groups split without overflowing');
 });
-
-test('six new frame-linked strip modes are distinct, frame-dependent and configuration-safe', () => {
-  const p=C.defaultProject(), frame=Object.fromEntries(keys.map(k=>[k.id,k.x<480?[190,35,15]:[10,85,170]]));
-  const saved=JSON.stringify(frame), signatures=new Set();
-  assert.equal(C.STRIP_MODES.length,14); assert.equal(C.FRAME_STRIP_MODES.length,7);
-  for(const mode of C.FRAME_STRIP_MODES.slice(1)){
-    p.strip.mode=mode; p.strip.gain=1.35;
-    const samples=[0.1,0.6,1.2,2].map(t=>C.renderStrip(p,frame,t,[{t:0.6,x:keys[20].x,y:keys[20].y}],keys));
-    const signature=JSON.stringify(samples); assert.ok(!signatures.has(signature),mode); signatures.add(signature);
-    for(const [index,sample] of samples.entries()){
-      assert.deepEqual(sample,C.renderStrip(p,frame,[0.1,0.6,1.2,2][index],[{t:0.6,x:keys[20].x,y:keys[20].y}],keys));
-      const packet=C.buildSideLightEffect(sample); assert.equal(packet.length,63); assert.equal(packet[6],3); assert.equal((9+packet.reduce((a,b)=>a+b,0))&255,255);
-    }
-    const different=Object.fromEntries(keys.map(k=>[k.id,[0,220,35]]));
-    assert.notDeepEqual(C.renderStrip(p,frame,0.6,[],keys),C.renderStrip(p,different,0.6,[],keys),mode+' samples keyboard colors');
-    const imported=C.validateProject(JSON.parse(JSON.stringify(p)),keys); assert.equal(imported.strip.mode,mode); assert.equal(imported.strip.gain,1.35);
-  }
-  assert.equal(JSON.stringify(frame),saved);
-});
-
-test('dominant linking avoids dark-key averaging and scan/split use physical keyboard geometry', () => {
-  const p=C.defaultProject(), sparse=Object.fromEntries(keys.map((k,i)=>[k.id,i<4?[200,80,20]:[0,0,0]]));
-  p.strip.mode='follow';const dim=C.renderStrip(p,sparse,0,[],keys).color;
-  p.strip.mode='follow-dominant';assert.deepEqual(C.renderStrip(p,sparse,0,[],keys).color,[200,80,20]);assert.ok(dim[0]<20);
-  const testKeys=[{id:2,x:0,w:50},{id:1,x:1000,w:50}], frame={1:[0,0,200],2:[200,0,0]};
-  p.strip.mode='follow-scan';
-  assert.deepEqual(C.renderStrip(p,frame,-Math.PI/2/0.9,[],testKeys).color,[200,0,0]);
-  assert.deepEqual(C.renderStrip(p,frame,Math.PI/2/0.9,[],testKeys).color,[0,0,200]);
-  p.strip.mode='follow-split';
-  assert.deepEqual(C.renderStrip(p,frame,-Math.PI/2/1.4,[],testKeys).color,[200,0,0]);
-  assert.deepEqual(C.renderStrip(p,frame,Math.PI/2/1.4,[],testKeys).color,[0,0,200]);
-});
-
-test('frame-linked breath and key flash animate and every mode keeps true black black', () => {
-  const p=C.defaultProject(), frame=Object.fromEntries(keys.map(k=>[k.id,[150,90,30]]));
-  p.strip.mode='follow-breathe';assert.notDeepEqual(C.renderStrip(p,frame,0,[],keys),C.renderStrip(p,frame,0.6,[],keys));
-  p.strip.mode='follow-flash';const events=[{t:1,x:0,y:0}];
-  assert.deepEqual(C.renderStrip(p,frame,1,events,keys).color,[150,90,30]);
-  assert.deepEqual(C.renderStrip(p,frame,3,events,keys).color,[38,23,8]);
-  const dark=Object.fromEntries(keys.map(k=>[k.id,[0,0,0]]));p.strip.gain=2;
-  for(const mode of C.FRAME_STRIP_MODES){p.strip.mode=mode;assert.deepEqual(C.renderStrip(p,dark,1,events,keys).color,[0,0,0],mode);}
+test('saved palettes preserve full colors, clone inputs and enforce names, bounds and duplicate protection',()=>{
+  const input={name:'  我的蓝调  ',color:[20,140,250],bg:[3,10,24],palette:[[20,80,140],[70,120,170],[110,180,255]]};
+  const validated=C.validatePaletteLibrary([input]);
+  assert.deepEqual(validated,[{...input,name:'我的蓝调'}]);
+  input.color[0]=99;input.palette[0][0]=4;assert.equal(validated[0].color[0],20);assert.equal(validated[0].palette[0][0],20);
+  assert.throws(()=>C.validatePaletteLibrary([input,{...input,name:'我的蓝调'}]),/同名/);
+  assert.throws(()=>C.validatePaletteLibrary([{...input,name:' '}]),/名称/);
+  assert.throws(()=>C.validatePaletteLibrary([{...input,name:'x'.repeat(41)}]),/名称/);
+  assert.throws(()=>C.validatePaletteLibrary([{...input,palette:[[999,1,2],[1,2,3]]}]),/RGB/);
+  assert.throws(()=>C.validatePaletteLibrary(Array(C.MAX_SAVED_PALETTES+1).fill(input)),/最多/);
 });
 
 test('software strip gain raises midtones once without clipping hues or changing native brightness', () => {
@@ -141,4 +108,43 @@ test('software strip gain raises midtones once without clipping hues or changing
   const packet=C.buildSideLightEffect(C.renderStrip(p,{},0));assert.equal(packet[11],4);
   delete p.strip.gain;const old=C.validateProject(p,keys);assert.equal(old.strip.gain,1);
   for(const gain of [0.99,2.01,'2',null,NaN,Infinity]){p.strip.gain=gain;assert.throws(()=>C.validateProject(p,keys),/鲜亮增强/);}
+});
+
+test('legacy strip linkage migrates to off while retaining brightness and colors',()=>{
+  for(const mode of ['follow','follow-split','follow-breathe','react','native-sync','follow-dominant']){
+    const p=C.defaultProject();p.strip={mode,color:[123,45,67],brightness:3,gain:1.5};p.paint[43]=[20,40,80];
+    const out=C.validateProject(p,keys);
+    assert.deepEqual(out.strip,{...p.strip,mode:'off'});assert.deepEqual(out.paint,p.paint);
+  }
+});
+test('original strip off, static and breathe keep their independent brightness and report format',()=>{
+  const p=C.defaultProject();p.settings.brightness=0;p.strip.color=[120,0,150];p.strip.brightness=4;
+  for(const [mode,id] of [['off',0],['solid',3],['breathe',4]]){
+    p.strip.mode=mode;
+    const packet=C.buildSideLightEffect(C.renderStrip(p));
+    assert.deepEqual([...packet.slice(0,8)],[4,6,0,1,0,7,id,0]);
+    assert.deepEqual([...packet.slice(8,12)],id===0?[0,0,0,0]:[120,0,150,4]);
+    assert.equal((9+packet.reduce((a,b)=>a+b,0))&255,255);
+  }
+  p.strip.mode='follow-split';assert.throws(()=>C.renderStrip(p),/无效/);
+});
+test('firmware neon and marquee match each captured 64-byte USB report',()=>{
+  const p=C.defaultProject();
+  for(const [mode,id,checksum] of [['native-neon',2,'62'],['native-marquee',5,'5f']]){
+    p.strip={mode,color:[200,175,255],brightness:4,gain:2};
+    assert.equal(C.validateProject(p,keys).strip.mode,mode);
+    const packet=C.buildSideLightEffect(C.renderStrip(p));
+    const captured='090406000100040'+id+'07c8afff0402';
+    assert.equal('09'+Buffer.from(packet).toString('hex'),captured.padEnd(126,'0')+checksum);
+  }
+});
+test('one-shot strip color clusters the visible frame without scaling down by keyboard brightness',()=>{
+  const p=C.defaultProject();p.settings.effect='static';p.settings.brightness=0;p.settings.color=[210,30,60];
+  for(const {id} of keys.slice(0,10))p.paint[id]=[20,180,255];
+  const sampled=C.dominantColor(C.render(p,keys,0,[],{},false),p.settings.color);
+  assert.deepEqual(sampled,[210,30,60]);
+  assert.deepEqual(C.dominantColor({1:[0,0,0]},p.settings.color),p.settings.color);
+  p.strip={mode:'auto-color',color:[0,30,255],brightness:4,gain:2};
+  const packet=C.buildSideLightEffect(C.renderStrip(p,sampled));
+  assert.deepEqual([...packet.slice(6,13)],[3,0,255,36,73,4,2]);
 });

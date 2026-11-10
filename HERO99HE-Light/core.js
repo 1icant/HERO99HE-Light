@@ -5,7 +5,7 @@
   // The same allowlisted URL is also the Dedicated Worker entry point.
   // It owns the HID handle; the page owns only permission selection and UI.
   if (typeof document === 'undefined' && typeof importScripts === 'function' && typeof postMessage === 'function') {
-    importScripts('layout.js?v=0.1.12');
+    importScripts('layout.js?v=0.1.26');
     const engine = api.createOutputEngine({ keys: root.HeroKeys, hid: root.navigator.hid, post: message => root.postMessage(message) });
     root.onmessage = async event => {
       const { id, type, payload } = event.data || {};
@@ -20,14 +20,43 @@
   'use strict';
   const REPORT_ID = 9, REPORT_BYTES = 63, PAYLOAD_BYTES = 56;
   const OUTPUT_POLICY = Object.freeze({ maxFramePackets: 4, paletteColors: 24, packetGapMs: 5, frameGapMs: 8, packetsPerSecond: 80, keepAliveMs: 250 });
-  // 101 IDs + up to 15 color headers (+ a possible split header) fit 3 packets,
-  // leaving the fourth budget slot for the strip at the default 20FPS.
-  const LINK_POLICY = Object.freeze({ maxFramePackets: 3, paletteColors: 15 });
-  const EFFECTS = ['static', 'rainbow', 'wave', 'breathe', 'meteor', 'ripple', 'heatmap', 'studio', 'gradient', 'aurora', 'checker', 'scanner', 'twinkle', 'fire', 'radar', 'keyfade', 'paletteflow', 'verticalrainbow', 'diagonal', 'spiral', 'plasma', 'rain', 'cometpair', 'centerwave', 'curtain', 'diamond', 'ribbons', 'fireflies', 'orbit', 'sunset', 'sparkburst', 'keycross'];
-  const FRAME_STRIP_MODES = Object.freeze(['follow', 'follow-dominant', 'follow-scan', 'follow-breathe', 'follow-complement', 'follow-split', 'follow-flash']);
-  const TIMED_FRAME_STRIP_MODES = ['follow-scan', 'follow-breathe', 'follow-split', 'follow-flash'];
-  const STRIP_MODES = ['off', 'solid', 'breathe', 'spectrum', 'palette', 'pulse', 'follow', 'react', ...FRAME_STRIP_MODES.slice(1)];
-  const STRIP_POLICY = Object.freeze({ intervalMs: 25, maxRefreshHz: 40 });
+  const EXTRA_EFFECTS = Object.freeze([
+    ['color-tide','彩潮入岸','flow','#325586','#5bcaba','#ffb596'],
+    ['spectrum-sweep','棱镜扫光','flow','#ff758a','#bce17d','#8ccafa'],
+    ['pinwheel','四色风车','flow','#ffb482','#c38ef1','#7ddcd8'],
+    ['chase','接力光点','flow','#44305f','#f7b8e9','#7fd6f7'],
+    ['splitwave','镜像浪涌','flow','#47b1f7','#2e3a55','#f985bc'],
+    ['rowrelay','逐行接力','flow','#394353','#b3f2d1','#9277dd'],
+    ['lasergrid','交织光栅','flow','#334057','#dba7f8','#89f6ff'],
+    ['waterfall','落瀑流光','flow','#294868','#5aaaff','#8df3de'],
+    ['duotone','左右撞色','ambient','#a583ff','#645d8f','#ffaf82'],
+    ['topography','地形色阶','ambient','#425c8f','#6dd7b0','#edbf84'],
+    ['embers','余烬微光','ambient','#3a2e40','#ba6751','#ffb37b'],
+    ['moonphase','月相盈亏','ambient','#2c395c','#92ade2','#f3e8d9'],
+    ['ocean','海面波纹','ambient','#2d4e7f','#3c97bf','#85eddc'],
+    ['kaleido','万花镜','ambient','#a675da','#f7b0c8','#8bdbd7'],
+    ['lanterns','暖灯游园','ambient','#3d364d','#e89e76','#f7d4a4'],
+    ['heartwave','心跳余波','ambient','#3e314c','#b75687','#f9a9bb'],
+    ['key-echo','按键回声','reactive','#423d64','#a296ed','#dce0ff'],
+    ['column-flash','垂直光柱','reactive','#354658','#72bfc8','#c2faec'],
+    ['row-flash','横向光迹','reactive','#463752','#c986b2','#ffc1dd'],
+    ['key-comet','击键彗尾','reactive','#303852','#79adf3','#b6ebfd'],
+    ['key-splash','指尖水花','reactive','#304f66','#56b9ce','#b2eff2'],
+    ['key-spot','指尖聚光','reactive','#524463','#bf93ea','#f0d5ff'],
+    ['key-confetti','彩纸弹射','reactive','#e280b9','#7ac7f5','#eed090'],
+    ['key-bloom','四叶绽放','reactive','#3d4558','#81c79e','#c9efab']
+  ]);
+  const EFFECTS = Object.freeze(['static', 'rainbow', 'wave', 'breathe', 'meteor', 'ripple', 'heatmap', 'studio', 'gradient', 'aurora', 'checker', 'scanner', 'twinkle', 'fire', 'radar', 'keyfade', 'paletteflow', 'verticalrainbow', 'diagonal', 'spiral', 'plasma', 'rain', 'cometpair', 'centerwave', 'curtain', 'diamond', 'ribbons', 'fireflies', 'orbit', 'sunset', 'sparkburst', 'keycross', ...EXTRA_EFFECTS.map(([id])=>id)]);
+  const NATIVE_STRIP_MODES=Object.freeze({'native-neon':2,'native-marquee':5});
+  const isNativeStrip=mode=>Object.hasOwn(NATIVE_STRIP_MODES,mode);
+  const STRIP_MODES=Object.freeze(['off','solid','breathe','auto-color',...Object.keys(NATIVE_STRIP_MODES)]);
+  const REMOVED_STRIP_MODES=new Set(['spectrum','palette','pulse','react','follow','follow-dominant','follow-scan','follow-breathe','follow-complement','follow-split','follow-flash','native-sync']);
+  const LOGO_MODES=Object.freeze(['off','solid','follow-color','keyflash','auto-color']);
+  const LEGACY_LOGO_MODES=new Set(['breathe','spectrum','palette','pulse','react','follow','follow-dominant','follow-scan','follow-breathe','follow-complement','follow-split','follow-flash','follow-strip']);
+  const EXTRA_REACTIVE=new Set(EXTRA_EFFECTS.filter(entry=>entry[2]==='reactive').map(([id])=>id));
+  const REACTIVE_EFFECTS=new Set(['ripple','heatmap','keyfade','sparkburst','keycross',...EXTRA_REACTIVE]);
+  const STATIC_EFFECTS=new Set(['static','gradient','heatmap','duotone','topography']);
+  const LOGO_FLASH_MS=160, SIDE_QUIET_MS=60;
   const PRESETS = [
     { name: '冰川蓝', color: [75,210,255], bg: [2,10,24], palette: [[20,70,200],[75,210,255],[210,250,255]] },
     { name: '赛博霓虹', color: [255,65,185], bg: [12,2,25], palette: [[255,30,160],[115,50,255],[0,220,255]] },
@@ -66,6 +95,22 @@
     if (!Array.isArray(value) || value.length !== 3 || value.some(n => !Number.isFinite(n) || n < 0 || n > 255)) throw Error('颜色必须是 0–255 的 RGB 三元组');
     return value.map(byte);
   }
+  const MAX_SAVED_PALETTES=60;
+  function validatePaletteColors(palette) {
+    if(!Array.isArray(palette)||palette.length<2||palette.length>8)throw Error('配色需要 2–8 个颜色');
+    return palette.map(rgb);
+  }
+  function validateSavedPalette(value) {
+    const name=typeof value?.name==='string'?value.name.trim().normalize('NFC'):'';
+    if(!name||name.length>40||/[\u0000-\u001f\u007f]/.test(name))throw Error('配色名称须为 1–40 个字符');
+    return {name,color:rgb(value.color),bg:rgb(value.bg),palette:validatePaletteColors(value.palette)};
+  }
+  function validatePaletteLibrary(value) {
+    if(!Array.isArray(value)||value.length>MAX_SAVED_PALETTES)throw Error('配色库最多保存 '+MAX_SAVED_PALETTES+' 组');
+    const list=value.map(validateSavedPalette);
+    if(new Set(list.map(preset=>preset.name)).size!==list.length)throw Error('已有同名配色，请换一个名称');
+    return list;
+  }
   function hsv(h, s = 1, v = 1) {
     h = ((h % 1) + 1) % 1;
     const f = (n) => { const k = (n + h * 6) % 6; return byte(255 * v * (1 - s * Math.max(0, Math.min(k, 4 - k, 1)))); };
@@ -87,7 +132,10 @@
     return out;
   }
   function buildPackets(frame, keys) {
-    const colors = colorMap(frame, keys, true), groups = new Map();
+    return packValidatedColors(colorMap(frame,keys,true),keys);
+  }
+  function packValidatedColors(colors,keys) {
+    const groups = new Map();
     for (const key of keys) {
       if (!Number.isInteger(key.id) || key.id < 0 || key.id > 255) throw Error('无效硬件键号');
       const c = colors[key.id], packed = c[0] * 65536 + c[1] * 256 + c[2];
@@ -119,7 +167,7 @@
   // 2-4 packet effects reported working on the user's keyboard.
   function prepareOutput(frame, keys, policy = OUTPUT_POLICY) {
     if (!Number.isInteger(policy.maxFramePackets) || policy.maxFramePackets < 1 || policy.maxFramePackets > OUTPUT_POLICY.maxFramePackets || !Number.isInteger(policy.paletteColors) || policy.paletteColors < 1 || policy.paletteColors > OUTPUT_POLICY.paletteColors) throw Error('无效稳帧预算');
-    const source = colorMap(frame, keys, true), originalPackets = buildPackets(source, keys);
+    const source = colorMap(frame, keys, true), originalPackets = packValidatedColors(source, keys);
     const histogram = new Map();
     for (const key of keys) {
       const color = source[key.id], packed = color[0] * 65536 + color[1] * 256 + color[2];
@@ -132,27 +180,27 @@
     // their original colors. Preserve real black (off) exactly.
     const entries = [...histogram.values()].sort((a, b) => a.packed - b.packed);
     const black = entries.find(entry => entry.packed === 0);
-    const boxes = [entries.filter(entry => entry !== black)];
+    const boxes = [makeBox(entries.filter(entry => entry !== black))];
     const budget = policy.paletteColors - (black ? 1 : 0);
-    function extent(box) {
+    function makeBox(box) {
       const lo = [255, 255, 255], hi = [0, 0, 0]; let weight = 0;
       for (const entry of box) { weight += entry.count; for (let axis = 0; axis < 3; axis++) { lo[axis] = Math.min(lo[axis], entry.color[axis]); hi[axis] = Math.max(hi[axis], entry.color[axis]); } }
       const ranges = hi.map((v, axis) => v - lo[axis]);
       const axis = ranges.indexOf(Math.max(...ranges));
-      return { axis, score: box.length > 1 ? ranges[axis] * Math.sqrt(weight) : -1, weight };
+      return { entries:box,axis,score:box.length>1?ranges[axis]*Math.sqrt(weight):-1,weight };
     }
     while (boxes.length < budget) {
       let selected = -1, best = -1, bounds;
-      for (let i = 0; i < boxes.length; i++) { const next = extent(boxes[i]); if (next.score > best) { selected = i; best = next.score; bounds = next; } }
+      for (let i = 0; i < boxes.length; i++) { const next=boxes[i];if(next.score>best){selected=i;best=next.score;bounds=next;} }
       if (selected < 0) break;
-      const box = boxes[selected].slice().sort((a, b) => a.color[bounds.axis] - b.color[bounds.axis] || a.packed - b.packed);
+      const box=bounds.entries.sort((a,b)=>a.color[bounds.axis]-b.color[bounds.axis]||a.packed-b.packed);
       let count = 0, cut = 1;
       for (let i = 0; i < box.length - 1; i++) { count += box[i].count; cut = i + 1; if (count >= bounds.weight / 2) break; }
-      boxes.splice(selected, 1, box.slice(0, cut), box.slice(cut));
+      boxes.splice(selected,1,makeBox(box.slice(0,cut)),makeBox(box.slice(cut)));
     }
     const replacements = new Map();
     if (black) replacements.set(0, [0, 0, 0]);
-    for (const box of boxes) {
+    for (const {entries:box} of boxes) {
       const sum = [0, 0, 0]; let count = 0;
       for (const entry of box) { count += entry.count; entry.color.forEach((v, axis) => { sum[axis] += v * entry.count; }); }
       const color = sum.map(v => byte(v / count));
@@ -160,7 +208,7 @@
     }
     const result = {};
     for (const key of keys) { const c = source[key.id]; result[key.id] = [...replacements.get(c[0] * 65536 + c[1] * 256 + c[2])]; }
-    const packets = buildPackets(result, keys);
+    const packets = packValidatedColors(result, keys);
     if (packets.length > policy.maxFramePackets) throw Error('复杂灯光帧超出稳定输出预算，已拒绝发送');
     return { frame: result, packets, sourceColors, colors: new Set(Object.values(result).map(c => c.join(','))).size, limited: true };
   }
@@ -176,9 +224,9 @@
       while (valid()) { const left = deadline - clock(); if (left <= 0) return true; await sleep(Math.max(1, Math.min(25, left))); }
       return false;
     }
-    function nextReadyAt(control = false) { return Math.max(nextBudgetAt, control ? nextPacketAt : nextFrameAt); }
+    function nextReadyAt(control = false) { return Math.max(nextBudgetAt, nextPacketAt, control ? 0 : nextFrameAt); }
     async function ready(valid = () => true, control = false) { return until(nextReadyAt(control), valid); }
-    async function sendFrame(packets, fps, valid = () => true, controlPacket = null) {
+    async function sendFrame(packets, fps, valid = () => true) {
       if (busy) throw Error('不允许并发提交灯光帧');
       if (!packets.length || packets.length > OUTPUT_POLICY.maxFramePackets) throw Error('灯光帧超出稳定输出包数');
       busy = true;
@@ -190,34 +238,22 @@
           if (!await until(nextPacketAt, valid)) return false;
           await device.sendReport(REPORT_ID, packet);
           nextPacketAt = clock() + OUTPUT_POLICY.packetGapMs;
-          options.onPacket?.();
-        }
-        // Append only AFTER the complete key frame. Account for the native tail
-        // in this transaction rather than waiting out a second frame reservation.
-        if (controlPacket) {
-          if (!await until(nextPacketAt, valid)) return false;
-          const controlBegan = clock();
-          try { await device.sendReport(REPORT_ID, controlPacket); }
-          catch (error) { error.details = { readOnly: false, query: '04/06', phase: 'stream-send', acknowledged: false }; throw error; }
-          nextPacketAt = clock() + OUTPUT_POLICY.packetGapMs;
-          options.onControl?.(clock() - controlBegan); options.onPacket?.();
         }
         nextFrameAt = began + frameInterval(fps, packets.length);
-        nextBudgetAt = Math.max(began + (packets.length + (controlPacket ? 1 : 0)) * 1000 / OUTPUT_POLICY.packetsPerSecond, clock() + OUTPUT_POLICY.frameGapMs);
+        nextBudgetAt = Math.max(began + packets.length * 1000 / OUTPUT_POLICY.packetsPerSecond, clock() + OUTPUT_POLICY.frameGapMs);
         completed = valid();
         return completed;
       } finally { if (!completed) nextBudgetAt = Math.max(nextBudgetAt, clock() + OUTPUT_POLICY.frameGapMs); busy = false; }
     }
     async function sendControl(packet, valid = () => true) {
       if (busy) throw Error('不允许并发提交灯光控制');
-      busy = true; let began = clock();
+      busy = true; let began = clock(), report;
       try {
         if (!await ready(valid, true) || !await until(nextPacketAt, valid)) return false;
-        began = clock(); await device.sendReport(REPORT_ID, packet);
-        options.onControl?.(clock() - began);
-        options.onPacket?.(); return true;
+        began=clock();report=packet;await device.sendReport(REPORT_ID,report);
+        return valid();
       } finally {
-        nextPacketAt = clock() + OUTPUT_POLICY.packetGapMs;
+        nextPacketAt = Math.max(nextPacketAt, clock() + OUTPUT_POLICY.packetGapMs, began + (report ? options.quietAfterControl?.(report) || 0 : 0));
         nextBudgetAt = Math.max(nextBudgetAt, began + 1000 / OUTPUT_POLICY.packetsPerSecond, clock() + OUTPUT_POLICY.frameGapMs);
         busy = false;
       }
@@ -225,82 +261,53 @@
     return { ready, nextReadyAt, sendFrame, sendControl };
   }
   function defaultProject() {
-    return { format: 'hero99-light/v1', layout: 'hero99he-101/v1', settings: { effect: 'rainbow', brightness: 0.6, speed: 1, fps: 20, color: [97, 218, 251], bg: [5, 8, 18], palette: [[97,218,251],[189,155,255],[246,153,182]] }, strip: { mode: 'off', color: [0,160,255], brightness: 2, gain: 1 }, paint: {}, frames: [], frameMs: 100 };
+    return { format: 'hero99-light/v1', layout: 'hero99he-101/v1', settings: { effect: 'rainbow', brightness: 0.6, speed: 1, fps: 20, color: [97, 218, 251], bg: [5, 8, 18], palette: [[97,218,251],[189,155,255],[246,153,182]] }, strip: { mode: 'off', color: [0,160,255], brightness: 2, gain: 1 },logo:{mode:'off',color:[0,160,255],brightness:2}, paint: {}, frames: [], frameMs: 100, frameDurations: [] };
   }
-  function renderStrip(project, frame, t, events = [], keys = []) {
-    const strip = project.strip, s = project.settings, time = t * s.speed;
-    const mean = values => [0,1,2].map(axis => byte(values.reduce((sum, c) => sum + c[axis], 0) / Math.max(1, values.length)));
-    const values = FRAME_STRIP_MODES.includes(strip.mode) ? Object.values(frame) : [];
-    function dominant() {
-      // Cluster similar colors, ignoring off keys so sparse effects stay vivid.
-      const groups = new Map();
-      for (const c of values) {
-        const weight = Math.max(...c); if (weight < 8) continue;
-        const id = c.map(n => Math.floor(n / 32)).join(',');
-        if (!groups.has(id)) groups.set(id, { weight: 0, color: [0,0,0] });
-        const g = groups.get(id); g.weight += weight;
-        c.forEach((n, i) => { g.color[i] += n * weight; });
-      }
-      const best = [...groups.values()].sort((a,b) => b.weight - a.weight)[0];
-      return best ? best.color.map(n => byte(n / best.weight)) : mean(values);
-    }
-    const keyColors = ['follow-scan', 'follow-split'].includes(strip.mode) ? keys.filter(k => frame[k.id]).map(k => ({ x: k.x + k.w / 2, color: frame[k.id] })) : [];
-    let color = strip.color;
-    switch (strip.mode) {
-      case 'off': return null;
-      case 'breathe': color = mix([0,0,0], color, (Math.sin(time * 2) + 1) / 2); break;
-      case 'spectrum': color = hsv(time * 0.08, 0.85); break;
-      case 'palette': color = paletteColor(s.palette, time * 0.09); break;
-      case 'pulse': color = mix([0,0,0], color, Math.pow((Math.sin(time * 3) + 1) / 2, 3)); break;
-      case 'follow': {
-        // Caller supplies the pre-key-brightness color frame for follow mode.
-        // The strip has its own hardware brightness; do not dim it twice.
-        color = mean(values); break;
-      }
-      case 'follow-dominant': color = dominant(); break;
-      case 'follow-scan': {
-        if (!keyColors.length) { color = mean(values); break; }
-        const lo = Math.min(...keyColors.map(k => k.x)), hi = Math.max(...keyColors.map(k => k.x));
-        const width = Math.max(1, hi - lo), center = lo + width * (Math.sin(time * 0.9) + 1) / 2;
-        let total = 0; const sums = [0,0,0];
-        for (const k of keyColors) {
-          const weight = Math.exp(-0.5 * Math.pow((k.x - center) / (width * 0.12), 2)); total += weight;
-          k.color.forEach((n,i) => { sums[i] += n * weight; });
-        }
-        color = sums.map(n => byte(n / total)); break;
-      }
-      case 'follow-breathe': color = mix([0,0,0], mean(values), 0.15 + 0.85 * (Math.sin(time * 2) + 1) / 2); break;
-      case 'follow-complement': {
-        const base = dominant(), sum = Math.max(...base) + Math.min(...base);
-        color = base.map(n => sum - n); break;
-      }
-      case 'follow-split': {
-        if (!keyColors.length) { color = mean(values); break; }
-        const mid = (Math.min(...keyColors.map(k => k.x)) + Math.max(...keyColors.map(k => k.x))) / 2;
-        const left = keyColors.filter(k => k.x <= mid).map(k => k.color), right = keyColors.filter(k => k.x > mid).map(k => k.color);
-        color = mix(mean(left), mean(right.length ? right : left), (Math.sin(time * 1.4) + 1) / 2); break;
-      }
-      case 'follow-flash': {
-        let level = 0;
-        for (const event of events) { const age = (t - event.t) * s.speed; if (age >= 0 && age < 1.5) level = Math.max(level, Math.exp(-age * 4)); }
-        color = mix(mean(values).map(n => byte(n * 0.25)), dominant(), level); break;
-      }
-      case 'react': {
-        let level = 0;
-        for (const event of events) { const age = (t - event.t) * s.speed; if (age >= 0 && age < 1.5) level = Math.max(level, Math.exp(-age * 3)); }
-        color = mix(s.bg, s.color, level); break;
-      }
-    }
-    // Software-only gain, capped by the brightest channel to preserve hue and
-    // keep black black. Hardware brightness remains the proven 0..4 range.
-    const gain = Math.min(strip.gain ?? 1, 255 / Math.max(1, ...color));
-    return { mode: 3, color: color.map(n => byte(n * gain)), brightness: strip.brightness, speed: 2 };
+  function frameDurations(project) { return project.frames.map((_,i)=>project.frameDurations?.[i]??project.frameMs); }
+  function studioFrameAt(project,seconds) {
+    const durations=frameDurations(project),total=durations.reduce((a,b)=>a+b,0);if(!total)return -1;
+    let at=((seconds*1000%total)+total)%total;
+    for(let i=0;i<durations.length;i++){if(at<durations[i])return i;at-=durations[i];}
+    return durations.length-1;
   }
-  function buildLightingQuery() {
-    // Public legacy lighting service: checkLightingSupported -> encode(0x82, 9, []).
-    const packet = new Uint8Array(REPORT_BYTES);
-    packet.set([0x82, 9, 0, 1, 0, 0]);
-    packet[62] = (255 - REPORT_ID - packet.reduce((sum, value) => sum + value, 0)) & 255;
+  function renderStrip(project,sampledColor=null) {
+    const {mode,color,brightness,gain=1}=project.strip;
+    if(mode==='off')return {mode:0,color:[0,0,0],brightness:0,speed:2};
+    // Keep the RGB slots used by the captured colorIndex=7 reports; firmware
+    // owns the multicolor animation, so do not apply the software gain.
+    if(isNativeStrip(mode))return {mode:NATIVE_STRIP_MODES[mode],color:[...color],brightness,speed:2};
+    if(mode!=='solid'&&mode!=='breathe'&&mode!=='auto-color')throw Error('灯带模式无效');
+    const chosen=mode==='auto-color'&&sampledColor?sampledColor:color;
+    const boost=Math.min(gain,255/Math.max(1,...chosen));
+    return {mode:mode==='breathe'?4:3,color:chosen.map(c=>byte(c*boost)),brightness,speed:2};
+  }
+  function buildLightingQuery(){return commandPacket(0x82,9);}
+  function dominantColor(frame,fallback){
+    const groups=new Map();
+    for(const c of Object.values(frame)){
+      const weight=Math.max(...c);if(weight<8)continue;
+      const id=(c[0]>>5)*64+(c[1]>>5)*8+(c[2]>>5);
+      let g=groups.get(id);if(!g){g={weight:0,sum:[0,0,0]};groups.set(id,g);}
+      g.weight+=weight;for(let i=0;i<3;i++)g.sum[i]+=c[i]*weight;
+    }
+    let best;for(const g of groups.values())if(!best||g.weight>best.weight)best=g;
+    return best?best.sum.map(v=>byte(v/best.weight)):[...fallback];
+  }
+  function renderLogo(project,frame,t,events=[]) {
+    const logo=project.logo;
+    if(logo.mode==='off')return null;
+    let color=logo.color;
+    if(logo.brightness===0)color=[0,0,0];
+    else if(logo.mode==='auto-color')color=dominantColor(frame,logo.color);
+    else if(logo.mode==='follow-color')color=project.settings.color;
+    else if(logo.mode==='keyflash')color=events.some(e=>t>=e.t&&t-e.t<LOGO_FLASH_MS/1000)?project.settings.color:[0,0,0];
+    return {mode:3,color:[...color],brightness:logo.brightness,speed:2};
+  }
+  function commandPacket(command,parameter,data=[],declaredLength=data.length) {
+    if(data.length>PAYLOAD_BYTES)throw Error('控制报文超长');
+    const packet=new Uint8Array(REPORT_BYTES);
+    packet.set([command,parameter,0,1,0,declaredLength,...data]);
+    packet[62]=(255-REPORT_ID-packet.reduce((sum,n)=>sum+n,0))&255;
     return packet;
   }
   function parseLightingCapabilities(report) {
@@ -320,245 +327,253 @@
       lightbox: rows || columns ? { rows, columns, effectMask: data.length >= 26 ? data[25] : null, dimensionsValid: rows > 0 && columns > 0 } : null,
       featureBytes: Array.from(data), rawReport: Array.from(bytes) };
   }
-  function buildSideLightEffect(settings) {
-    if (!settings || settings.mode !== 3) throw Error('目前只允许已核对的氛围灯自定义常亮模式 3');
-    for (const name of ['brightness', 'speed']) if (!Number.isInteger(settings[name]) || settings[name] < 0 || settings[name] > 4) throw Error('氛围灯参数必须为 0–4 的整数：' + name);
-    const color = rgb(settings.color), packet = new Uint8Array(REPORT_BYTES);
-    // Official setEffect(2): encode(4, 6, [mode, colorIndex, R,G,B, brightness,speed]).
-    packet.set([4, 6, 0, 1, 0, 7, 3, 0, ...color, settings.brightness, settings.speed]);
-    packet[62] = (255 - REPORT_ID - packet.reduce((sum, value) => sum + value, 0)) & 255;
-    return packet;
+  function buildLampPacket(parameter,settings,modes,multicolor=false) {
+    if(!settings||!modes.includes(settings.mode))throw Error('灯光模式不支持');
+    for(const name of ['brightness','speed'])if(!Number.isInteger(settings[name])||settings[name]<0||settings[name]>4)throw Error('亮度和速度须为 0–4 档');
+    // Captured Legacy neon / marquee declare length 4, but carry 7 bytes.
+    return commandPacket(4,parameter,[settings.mode,multicolor?7:0,...rgb(settings.color),settings.brightness,settings.speed],multicolor?4:7);
   }
-  function createLightingProbe(device, options = {}) {
+  const SIDE_LIGHT_IDS=[0,2,3,4,5];
+  function buildSideLightEffect(settings){return buildLampPacket(6,settings,SIDE_LIGHT_IDS,settings?.mode===2||settings?.mode===5);}
+  function buildLogoLightEffect(settings){return buildLampPacket(11,settings,[3]);}
+  function createLightingProbe(device, options={}) {
     validateDevice(device);
     function hasInput(list) {
-      return (list || []).some(c => (c.usagePage === 0xff60 && c.usage === 0x61 && (c.inputReports || []).some(r => r.reportId === REPORT_ID && (r.items || []).reduce((n, item) => n + item.reportCount * item.reportSize, 0) === REPORT_BYTES * 8)) || hasInput(c.children));
+      return (list||[]).some(c=>(c.usagePage===0xff60&&c.usage===0x61&&(c.inputReports||[]).some(r=>
+        r.reportId===REPORT_ID&&(r.items||[]).reduce((n,i)=>n+i.reportCount*i.reportSize,0)===REPORT_BYTES*8))||hasInput(c.children));
     }
-    if (!hasInput(device.collections) || !device.addEventListener || !device.removeEventListener) throw Error('未找到 Report 9 / 63 字节的输入通道，未发送查询；请导出诊断');
-    const native = options.operation === 'side-light';
-    if (options.operation !== undefined && !native) throw Error('不支持的灯光操作');
-    const request = native ? buildSideLightEffect(options.settings) : buildLightingQuery();
-    const command = native ? 4 : 0x82, parameter = native ? 6 : 9;
-    const setTimer = options.setTimeout || setTimeout, clearTimer = options.clearTimeout || clearTimeout;
+    if(!hasInput(device.collections)||!device.addEventListener||!device.removeEventListener)throw Error('灯光接口没有可用的设备响应通道');
+    const setTimer=options.setTimeout||setTimeout,clearTimer=options.clearTimeout||clearTimeout;
     let cancel;
-    const promise = new Promise((resolve, reject) => {
-      let settled = false, timer, best = null;
-      const responses = []; let totalMatchingResponses = 0;
-      function details() { return { readOnly: !native, query: native ? '04/06' : '82/09', totalMatchingResponses, responses: responses.map(item => ({ ...item, rawReport: [...item.rawReport] })) }; }
-      const finish = (error, result) => {
-        if (settled) return; settled = true; clearTimer(timer); device.removeEventListener('inputreport', onReport);
-        if (error) { error.details = details(); reject(error); }
-        else resolve({ ...result, queryCapture: details() });
-      };
-      const onReport = event => {
-        if (event.reportId !== REPORT_ID || !event.data || event.data.byteLength < 2) return;
-        const bytes = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
-        if (bytes[0] !== command || bytes[1] !== parameter) return; // Ignore unrelated reports, including keyboard activity.
-        totalMatchingResponses++;
-        const captured = { receivedOrder: totalMatchingResponses, reportId: event.reportId, byteLength: bytes.length, declaredLength: bytes.length > 5 ? bytes[5] : null, rawReport: Array.from(bytes.slice(0, REPORT_BYTES)) };
-        // Bound diagnostic memory even if a device repeatedly emits matching replies.
-        if (responses.length < 8) responses.push(captured);
-        try {
-          if (native) {
-            if (bytes.length !== REPORT_BYTES || bytes[3] !== 1 || bytes[4] !== 0 || bytes[5] > PAYLOAD_BYTES) throw Error('氛围灯设置回执格式异常；不会重试');
-            if (((REPORT_ID + bytes.reduce((sum, value) => sum + value, 0)) & 255) !== 255) throw Error('氛围灯设置回执校验失败；不会重试');
-            finish(null, { acknowledged: true, effect: { mode: 3, color: rgb(options.settings.color), brightness: options.settings.brightness, speed: options.settings.speed }, rawReport: Array.from(bytes), hardwareVerified: false }); return;
-          }
-          const parsed = parseLightingCapabilities(bytes);
-          if (!best || parsed.declaredLength >= best.declaredLength) best = parsed;
-          if (parsed.capabilityFieldsComplete) finish(null, parsed);
-          // A short reply may be an acknowledgement preceding the actual data.
-          // Keep listening within the original timeout, without sending again.
-        } catch (error) { captured.parseError = error.message; finish(error); }
-      };
-      cancel = () => finish(Error(native ? '氛围灯设置等待已取消；已发出的设置不能撤回' : '灯光能力查询已取消'));
-      device.addEventListener('inputreport', onReport);
-      timer = setTimer(() => best ? finish(null, { ...best, waitExpired: true }) : finish(Error(native ? '氛围灯设置回执超时，灯效可能已改变；不会重试，请观察实物并导出诊断' : '灯光能力查询超时，未收到匹配响应；未设置任何灯效，请导出诊断')), options.timeoutMs || 2000);
-      try { Promise.resolve((options.sendReport || ((id, packet) => device.sendReport(id, packet)))(REPORT_ID, request)).catch(error => finish(error)); }
-      catch (error) { finish(error); }
+    const promise=new Promise((resolve,reject)=>{
+      let timer,settled=false,best=null;
+      function finish(error,value){
+        if(settled)return;
+        settled=true;clearTimer(timer);device.removeEventListener('inputreport',onReport);
+        if(error)reject(error);else resolve(value);
+      }
+      function onReport(event){
+        if(event.reportId!==REPORT_ID||!event.data||event.data.byteLength<2)return;
+        const v=event.data,bytes=new Uint8Array(v.buffer,v.byteOffset,v.byteLength);
+        if(bytes[0]!==0x82||bytes[1]!==9)return;
+        try{
+          const parsed=parseLightingCapabilities(bytes);
+          if(!best||parsed.parsedLength>=best.parsedLength)best=parsed;
+          if(parsed.capabilityFieldsComplete)finish(null,parsed);
+        }catch(error){finish(error);}
+      }
+      cancel=()=>finish(Error('灯光操作已取消'));
+      device.addEventListener('inputreport',onReport);
+      timer=setTimer(()=>best?finish(null,best):finish(Error('键盘没有返回灯光能力，未发送设置')),options.timeoutMs??2000);
+      try{Promise.resolve((options.sendReport||((id,p)=>device.sendReport(id,p)))(REPORT_ID,buildLightingQuery())).catch(finish);}
+      catch(error){finish(error);}
     });
-    return { promise, cancel: () => cancel?.() };
+    return {promise,cancel:()=>cancel?.()};
   }
+
+  function isAnimated(project,selectedFrame,t,events,ignoreBrightness=false) {
+    const {effect,brightness,speed}=project.settings;
+    if(selectedFrame>=0||(!ignoreBrightness&&brightness===0)||STATIC_EFFECTS.has(effect))return false;
+    if(effect==='studio')return project.frames.length>1;
+    if(REACTIVE_EFFECTS.has(effect))return events.some(e=>t>=e.t&&(t-e.t)*speed<2.2);
+    return true;
+  }
+  function recordPress(events,heat,key,t) {
+    while(events.length&&(events.length>=60||events[0].t<t-22))events.shift();
+    events.push({t,x:key.x,y:key.y});
+    heat[key.id]=Math.min(12,(heat[key.id]||0)+1);
+  }
+  function sameFrame(a,b,keys) {
+    return a===b||Boolean(a&&b&&keys.every(({id})=>a[id][0]===b[id][0]&&a[id][1]===b[id][1]&&a[id][2]===b[id][2]));
+  }
+
   function createOutputEngine(options) {
-    const { keys, hid } = options, post = options.post || (() => {});
-    const clock = options.now || (() => performance.now());
-    const sleep = options.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
-    let device = null, sender = null, running = false, generation = 0, loopPromise = null, connecting = false;
-    let lightingProbe = null, probing = false, lightingCapabilities = null, controlPromise = null;
-    let sideConsent = false, lastSideAt = -Infinity, lastSideKey = '', sideUpdates = 0, sideAcks = 0, maxControlSendMs = 0;
-    let keyboardEnabled = true, activeStrip = null, sideDirty = false, lastReference = null;
-    const sideAck = event => {
-      if (!sideConsent || event.reportId !== REPORT_ID || event.data?.byteLength !== REPORT_BYTES) return;
-      const bytes = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
-      if (bytes[0] === 4 && bytes[1] === 6 && bytes[3] === 1 && bytes[4] === 0 && bytes[5] <= PAYLOAD_BYTES && ((REPORT_ID + bytes.reduce((sum,n) => sum+n,0)) & 255) === 255) sideAcks++;
-    };
-    let project = defaultProject(), selectedFrame = -1, events = [], heat = {}, epoch = clock(), time = 0;
-    let sentFrames = 0, sentPackets = 0, lastSentAt = -Infinity, lastStatsAt = -Infinity, beganAt = 0, maxFrameGapMs = 0, previous = '', lastOutput = null;
-    function state(value) {
-      const validated = validateProject(value.project, keys), selected = value.selectedFrame;
-      if (!Number.isInteger(selected) || selected < -1 || selected >= validated.frames.length) throw Error('后台动画帧索引无效');
-      if (!Number.isFinite(value.time) || value.time < 0) throw Error('后台时间参数无效');
-      if (!Array.isArray(value.events) || value.events.length > 60 || value.events.some(e => !e || ![e.t, e.x, e.y].every(Number.isFinite))) throw Error('后台按键事件无效');
-      const nextHeat = {}, validIds = new Set(keys.map(k => String(k.id)));
-      if (!value.heat || typeof value.heat !== 'object' || Array.isArray(value.heat)) throw Error('后台热力参数无效');
-      for (const [id, count] of Object.entries(value.heat)) {
-        if (!validIds.has(id) || !Number.isFinite(count) || count < 0) throw Error('后台热力键号无效');
-        nextHeat[id] = count;
+    const {keys,hid}=options,byId=new Map(keys.map(k=>[k.id,k])),post=options.post||(()=>{});
+    const clock=options.now||(()=>performance.now()),setTimer=options.setTimeout||setTimeout,clearTimer=options.clearTimeout||clearTimeout;
+    const sleep=options.sleep||(ms=>new Promise(resolve=>setTimer(resolve,ms)));
+    let device=null,sender=null,connecting=false,capabilities=null,probe=null,control=null,task=null,timer=null,generation=0;
+    let keyboard=false,logo=null,events=[],heat={},project=defaultProject(),selectedFrame=-1,epoch=clock(),time=0;
+    let keyAt=Infinity,logoAt=Infinity,lastKeyAt=-Infinity,lastLogoAt=-Infinity,keyDirty=false,wasAnimated=false;
+    let sourceFrame=null,keyOutput=null,lastKeyFrame=null,lastLogoRGB=-1;
+    const active=()=>({keyboard,logoMode:logo?.mode||'off'});
+    const timeAt=at=>time+(at-epoch)/1000;
+    const sample=(at,scale)=>selectedFrame>=0?Object.fromEntries(keys.map(k=>[k.id,
+      project.frames[selectedFrame][k.id].map(c=>byte(c*(scale?project.settings.brightness:1)))])):
+      render(project,keys,timeAt(at),events,heat,scale);
+    function cancelTimer(){if(timer!==null){clearTimer(timer);timer=null;}}
+    function schedule(){
+      cancelTimer();
+      if(!sender||control||task)return;
+      const next=Math.min(keyboard?Math.max(keyAt,sender.nextReadyAt()):Infinity,logo?Math.max(logoAt,sender.nextReadyAt(true)):Infinity);
+      if(Number.isFinite(next))timer=setTimer(drive,Math.max(0,Math.ceil(next-clock())));
+    }
+    const rgbKey=({color:[r,g,b]})=>r*65536+g*256+b;
+    function logoSettings(config,at){
+      return renderLogo({...project,logo:config},config.mode==='auto-color'?sample(at,false):{},timeAt(at),events);
+    }
+    function nextLogo(config,at){
+      if(config.mode==='auto-color')return isAnimated(project,selectedFrame,timeAt(at),events,true)?at+300:Infinity;
+      if(config.mode==='keyflash'){
+        const age=timeAt(at)-(events.at(-1)?.t??-Infinity);
+        return age<LOGO_FLASH_MS/1000?at+Math.max(1,LOGO_FLASH_MS-age*1000):Infinity;
       }
-      project = validated; selectedFrame = selected; events = value.events.map(e => ({ t: e.t, x: e.x, y: e.y })); heat = nextHeat;
-      epoch = clock(); time = value.time;
+      return Infinity;
     }
-    function sample(scale = true, sampledAt = clock()) {
-      if (selectedFrame >= 0) return Object.fromEntries(keys.map(k => [k.id, project.frames[selectedFrame][k.id].map(c => byte(c * (scale ? project.settings.brightness : 1)))]));
-      return render(project, keys, time + (sampledAt - epoch) / 1000, events, heat, scale);
+    function dirtyLogo(){
+      if(!logo)return;
+      logoAt=Math.max(clock(),lastLogoAt+(logo.mode==='auto-color'?300:25));
     }
-    function stats(force = false) {
-      if (!force && clock() - lastStatsAt < 250) return;
-      lastStatsAt = clock();
-      post({ event: 'stats', running, keyboardEnabled, sentFrames, sentPackets, maxFrameGapMs, maxControlSendMs, sideUpdates, sideAcks, stripMode: sideConsent ? activeStrip.mode : 'off', fps: sentFrames * 1000 / Math.max(1, clock() - beganAt),
-        lastFrame: lastOutput ? { sourceColors: lastOutput.sourceColors, colors: lastOutput.colors, packets: lastOutput.packets.length, limited: lastOutput.limited } : null });
-    }
-    async function stop() {
-      running = false; sideConsent = false; generation++;
-      device?.removeEventListener?.('inputreport', sideAck);
-      probing = false; lightingProbe?.cancel();
-      if (controlPromise) await controlPromise.catch(() => {});
-      if (loopPromise) await loopPromise;
-      stats(true);
-    }
-    async function loop(token) {
-      const valid = () => running && token === generation && Boolean(device);
-      while (valid()) {
-        // Independent key and native deadlines; low keyboard FPS must not hold
-        // the strip behind the key frame timer. Both share the packet budget.
-        const frameLinked = sideConsent && keyboardEnabled && FRAME_STRIP_MODES.includes(activeStrip.mode);
-        const linkedAnimation = frameLinked && TIMED_FRAME_STRIP_MODES.includes(activeStrip.mode);
-        const linkedLocked = frameLinked && !linkedAnimation;
-        const nextAt = Math.min(keyboardEnabled ? sender.nextReadyAt() : Infinity,
-          sideConsent && (!linkedLocked || sideDirty) ? Math.max(sender.nextReadyAt(true), lastSideAt + STRIP_POLICY.intervalMs) : Infinity);
-        if (nextAt > clock()) { await sleep(Math.max(1, Math.min(25, nextAt - clock()))); continue; }
-        const sampledAt = clock(), reference = sample(false, sampledAt);
-        const frame = Object.fromEntries(keys.map(k => [k.id, reference[k.id].map(c => byte(c * project.settings.brightness))]));
-        const output = prepareOutput(frame, keys, sideConsent && keyboardEnabled ? LINK_POLICY : OUTPUT_POLICY), key = JSON.stringify(output.frame);
-        const keyChanged = key !== previous;
-        const keyDue = keyboardEnabled && sampledAt >= sender.nextReadyAt() && (keyChanged || sampledAt - lastSentAt >= OUTPUT_POLICY.keepAliveMs);
-        let settings = null, sideKey = '', controlPacket = null;
-        const controlFits = !keyboardEnabled || !keyChanged || sampledAt + Math.max(1000 / OUTPUT_POLICY.packetsPerSecond, maxControlSendMs + OUTPUT_POLICY.frameGapMs) <= sender.nextReadyAt();
-        const sideDue = sideConsent && sampledAt >= sender.nextReadyAt(true) && (keyDue ||
-          (sampledAt - lastSideAt >= STRIP_POLICY.intervalMs && (!frameLinked || sideDirty || (linkedAnimation && !keyChanged)) && controlFits));
-        if (sideDue) {
-          const stripFrame = frameLinked && !keyDue ? (lastReference || reference) : reference;
-          settings = renderStrip({ ...project, strip: activeStrip }, stripFrame, time + (sampledAt - epoch) / 1000, events, keys);
-          sideKey = JSON.stringify(settings);
-          if (keyDue || sideDirty || sideKey !== lastSideKey) controlPacket = buildSideLightEffect(settings);
-          else lastSideAt = sampledAt; // Deduplication must not become a 1ms polling loop.
+    async function tick(current,valid) {
+      const at=clock();
+      if(logo&&at>=Math.max(logoAt,current.nextReadyAt(true))){
+        const settings=logoSettings(logo,at),color=rgbKey(settings);
+        lastLogoAt=at;logoAt=nextLogo(logo,at);
+        if(color!==lastLogoRGB){
+          if(await current.sendControl(buildLogoLightEffect(settings),valid)&&valid())lastLogoRGB=color;
+          return;
         }
-        let frameSent = false;
-        if (keyDue) {
-          if (!await sender.sendFrame(output.packets, project.settings.fps, valid, controlPacket)) return;
-          const completedAt = clock(); if (Number.isFinite(lastSentAt)) maxFrameGapMs = Math.max(maxFrameGapMs, completedAt - lastSentAt);
-          lastSentAt = completedAt; previous = key; lastOutput = output; lastReference = reference; sentFrames++; frameSent = true; sideDirty = true; stats();
-        }
-        if (!valid()) return;
-        if (controlPacket) {
-          if (!frameSent) {
-            try { if (!await sender.sendControl(buildSideLightEffect(settings), valid)) return; }
-            catch (error) { error.details = { readOnly: false, query: '04/06', phase: 'stream-send', acknowledged: false }; throw error; }
-          }
-          if (!valid()) return;
-          // Schedule from sampling/start, not native completion: variable key
-          // packet offsets must not cause a target to skip alternate frames.
-          lastSideAt = sampledAt; lastSideKey = sideKey; sideDirty = false; sideUpdates++; stats();
-        }
-        if (!frameSent && !controlPacket) await sleep(Math.max(1, Math.min(25,
-          keyboardEnabled ? OUTPUT_POLICY.keepAliveMs - (clock() - lastSentAt) : 25,
-          sideConsent && !linkedLocked && controlFits ? lastSideAt + STRIP_POLICY.intervalMs - clock() :
-            keyboardEnabled && keyChanged ? sender.nextReadyAt() - clock() : 25)));
+      }
+      if(!keyboard||at<Math.max(keyAt,current.nextReadyAt()))return;
+      const animated=isAnimated(project,selectedFrame,timeAt(at),events);
+      // Static keepalives reuse the encoded reports. Render the final idle
+      // frame once when a reactive effect expires.
+      if(keyDirty||animated||wasAnimated||!keyOutput){
+        const frame=sample(at,true);
+        if(!sameFrame(frame,sourceFrame,keys)){sourceFrame=frame;keyOutput=prepareOutput(frame,keys);}
+        keyDirty=false;
+      }
+      wasAnimated=animated;
+      const interval=frameInterval(project.settings.fps,keyOutput.packets.length);
+      keyAt=animated?at+interval:Math.max(at+1,lastKeyAt+OUTPUT_POLICY.keepAliveMs);
+      if(sameFrame(keyOutput.frame,lastKeyFrame,keys)&&at-lastKeyAt<OUTPUT_POLICY.keepAliveMs)return;
+      const frame=keyOutput.frame;
+      if(await current.sendFrame(keyOutput.packets,project.settings.fps,valid)&&valid()){
+        lastKeyAt=clock();lastKeyFrame=frame;
+        if(!animated&&!keyDirty)keyAt=lastKeyAt+OUTPUT_POLICY.keepAliveMs;
       }
     }
-    hid?.addEventListener?.('disconnect', event => {
-      if (event.device !== device) return;
-      device.removeEventListener?.('inputreport', sideAck); sideConsent = false;
-      device = null; sender = null; running = false; generation++;
-      lightingCapabilities = null;
-      probing = false; lightingProbe?.cancel();
-      post({ event: 'disconnected' });
+    function drive(){
+      timer=null;
+      const current=sender,token=generation,valid=()=>sender===current&&generation===token;
+      if(!current||control)return;
+      task=tick(current,valid).catch(error=>{
+        if(valid()){keyboard=false;logo=null;keyAt=logoAt=Infinity;post({event:'fault',error:error.message});}
+      }).finally(()=>{task=null;schedule();});
+    }
+    function exclusive(fn){
+      if(!device||!sender)throw Error('请先连接键盘');
+      if(control)throw Error('请等待当前灯光操作完成');
+      cancelTimer();
+      const selected=device,current=sender,token=generation,valid=()=>selected===device&&token===generation;
+      const operation=(async()=>{
+        await task;
+        if(!valid())throw Error('灯光操作已取消');
+        return fn(selected,current,valid);
+      })();
+      control=operation;
+      return operation.finally(()=>{if(control===operation)control=null;schedule();});
+    }
+    async function stop(){
+      generation++;keyboard=false;logo=null;keyAt=logoAt=Infinity;cancelTimer();probe?.cancel();
+      await Promise.allSettled([task,control]);
+      sourceFrame=keyOutput=lastKeyFrame=null;
+      return active();
+    }
+    async function getCapabilities(selected,current,valid) {
+      if(capabilities)return capabilities;
+      if(!await current.ready(valid,true)||!valid())throw Error('灯光操作已取消');
+      let submitted;
+      probe=createLightingProbe(selected,{setTimeout:options.setTimeout,clearTimeout:options.clearTimeout,
+        sendReport:(_id,packet)=>submitted=current.sendControl(packet,valid).then(ok=>{if(!ok)throw Error('灯光操作已取消');})});
+      try{
+        const reply=await probe.promise;await submitted;
+        if(!valid())throw Error('灯光操作已取消');
+        if(reply.sideLight!==null&&reply.logoLight!==null)capabilities={sideLight:reply.sideLight,logoLight:reply.logoLight};
+        return reply;
+      }finally{await submitted?.catch(()=>{});probe=null;}
+    }
+    hid?.addEventListener?.('disconnect',event=>{
+      if(event.device!==device)return;
+      void stop();device=sender=capabilities=null;post({event:'disconnected'});
     });
-    async function command(type, payload) {
-      if (type === 'state') { state(payload); return true; }
-      if (type === 'connect') {
-        if (!hid?.getDevices) throw Error('浏览器未提供后台 WebHID；请使用新版 Chrome / Edge。不会退回依赖网页焦点的发送方式。');
-        if (device || connecting) throw Error('后台设备已连接或正在连接');
-        connecting = true; let chosen;
-        try {
-          const candidates = (await hid.getDevices()).filter(d => {
-            if (d.vendorId !== payload.vendorId || d.productId !== payload.productId || d.productName !== payload.productName) return false;
-            try { return validateDevice(d); } catch { return false; }
+    async function command(type,payload) {
+      if(type==='state'){
+        const reuse=payload.reuseTimeline===true;
+        const next=validateProject(reuse?{...payload.project,frames:[],frameDurations:[]}:payload.project,keys);
+        if(reuse){next.frames=project.frames;next.frameDurations=project.frameDurations;}
+        if(!Number.isInteger(payload.selectedFrame)||payload.selectedFrame<-1||payload.selectedFrame>=next.frames.length||
+          !Number.isFinite(payload.time)||payload.time<0)throw Error('后台预览状态无效');
+        if(payload.resetEvents)events=[];
+        project=next;selectedFrame=payload.selectedFrame;time=payload.time;epoch=clock();
+        keyDirty=true;keyAt=0;dirtyLogo();schedule();return true;
+      }
+      if(type==='key-event'){
+        const key=byId.get(payload?.id),t=payload?.t;
+        if(!key||!Number.isFinite(t)||t<0)throw Error('后台按键事件无效');
+        const at=clock();
+        if(t>timeAt(at)){time=t;epoch=at;}
+        recordPress(events,heat,key,t);
+        const keyChanges=keyboard&&selectedFrame<0&&REACTIVE_EFFECTS.has(project.settings.effect);
+        if(keyChanges){keyDirty=true;keyAt=0;}
+        const logoChanges=logo?.mode==='keyflash'||(logo?.mode==='auto-color'&&selectedFrame<0&&REACTIVE_EFFECTS.has(project.settings.effect));
+        if(logoChanges)dirtyLogo();
+        if(keyChanges||logoChanges)schedule();
+        return true;
+      }
+      if(type==='connect'){
+        if(!hid?.getDevices)throw Error('浏览器未提供后台 WebHID；请使用新版 Chrome / Edge。');
+        if(device||connecting||control||task)throw Error('后台设备已连接或正在连接');
+        connecting=true;
+        try{
+          const candidates=(await hid.getDevices()).filter(d=>{
+            if(d.vendorId!==payload.vendorId||d.productId!==payload.productId||d.productName!==payload.productName)return false;
+            try{return validateDevice(d);}catch{return false;}
           });
-          if (candidates.length !== 1) throw Error(candidates.length ? '检测到多把同型号已授权键盘，无法确定刚选择的设备；请只保留一把后重试' : '后台未找到刚授权的 HERO 99HE 灯光接口');
-          chosen = candidates[0]; if (!chosen.opened) await chosen.open();
-          device = chosen; sender = createSender(device, { now: clock, sleep, onPacket: () => { sentPackets++; }, onControl: ms => { maxControlSendMs = Math.max(maxControlSendMs, ms); } });
-          lightingCapabilities = null;
-          return { mode: 'dedicated-worker', productName: chosen.productName };
-        } catch (error) { if (chosen?.opened && chosen !== device) await chosen.close().catch(() => {}); throw error; }
-        finally { connecting = false; }
+          if(candidates.length!==1)throw Error(candidates.length?'检测到多把同型号键盘，请只保留一把':'后台未找到刚授权的 HERO 99HE 灯光接口');
+          const chosen=candidates[0];if(!chosen.opened)await chosen.open();
+          device=chosen;capabilities=null;events=[];heat={};
+          sender=createSender(device,{now:clock,sleep,quietAfterControl:p=>p[0]===4&&p[1]===6?SIDE_QUIET_MS:0});
+          return {productName:device.productName};
+        }finally{connecting=false;}
       }
-      if (type === 'start') {
-        if (!device || !sender) throw Error('后台设备尚未连接');
-        if (probing) throw Error('灯光能力查询期间不能开始输出');
-        if (running) throw Error('后台已在输出');
-        if (project.strip.mode !== 'off' && (payload?.sideConsent !== true || lightingCapabilities?.sideLight !== true)) throw Error('灯带模式需要先读取本次能力并单独允许联动，或将灯带设为不联动');
-        keyboardEnabled = payload?.keyboard !== false;
-        sideConsent = project.strip.mode !== 'off' && payload?.sideConsent === true;
-        if (!keyboardEnabled && !sideConsent) throw Error('没有需要启动的灯光');
-        activeStrip = { ...project.strip, color: [...project.strip.color] };
-        lastSideAt = -Infinity; lastSideKey = ''; sideDirty = false; lastReference = null; sideUpdates = 0; sideAcks = 0; maxControlSendMs = 0;
-        if (sideConsent) device.addEventListener('inputreport', sideAck);
-        sentFrames = 0; sentPackets = 0; previous = ''; lastOutput = null; lastSentAt = -Infinity; lastStatsAt = -Infinity; maxFrameGapMs = 0; beganAt = clock();
-        running = true; const token = ++generation;
-        loopPromise = loop(token).catch(error => { running = false; sideConsent = false; device?.removeEventListener?.('inputreport', sideAck); generation++; post({ event: 'fault', error: error.message, details: error.details || null }); });
-        return true;
+      if(type==='start'){
+        if(!device||!sender||control)throw Error('请先连接键盘并等待当前操作完成');
+        if(!keyboard){
+          keyboard=true;keyAt=0;lastKeyAt=-Infinity;sourceFrame=keyOutput=lastKeyFrame=null;keyDirty=true;
+          schedule();
+        }
+        return active();
       }
-      if (type === 'stop') { await stop(); return true; }
-      if (type === 'inspect-lighting') {
-        if (!device || !sender) throw Error('请先连接键盘');
-        if (running || connecting || probing) throw Error('请先停止输出并等待当前操作完成');
-        probing = true; lightingCapabilities = null; const selected = device;
-        try {
-          if (!await sender.ready(() => probing && device === selected, true)) throw Error('灯光能力查询已取消');
-          lightingProbe = createLightingProbe(selected, { setTimeout: options.setTimeout, clearTimeout: options.clearTimeout });
-          lightingCapabilities = await lightingProbe.promise;
-          return lightingCapabilities;
-        } finally { lightingProbe = null; probing = false; }
-      }
-      if (type === 'set-side-light') {
-        if (!device || !sender) throw Error('请先连接键盘');
-        if (running || connecting || probing) throw Error('请先停止输出并等待当前操作完成');
-        if (payload?.consent !== true) throw Error('请明确允许更改原厂氛围灯');
-        if (lightingCapabilities?.sideLight !== true) throw Error('请先读取本次连接的能力并确认支持侧灯/氛围灯');
-        buildSideLightEffect(payload.settings); // Reject invalid settings before sending anything.
-        probing = true; const selected = device;
-        const operation = (async () => {
-          try {
-            if (!await sender.ready(() => probing && device === selected, true)) throw Error('氛围灯设置已取消');
-            lightingProbe = createLightingProbe(selected, { operation: 'side-light', settings: payload.settings, setTimeout: options.setTimeout, clearTimeout: options.clearTimeout });
-            return await lightingProbe.promise;
-          } finally {
-            await sleep(OUTPUT_POLICY.frameGapMs);
-            lightingProbe = null; probing = false;
+      if(type==='apply-light'){
+        const channel=payload?.channel;
+        if(channel!=='strip'&&channel!=='logo')throw Error('未知灯光通道');
+        if(payload.consent!==true)throw Error('请确认应用灯光设置');
+        const config=project[channel],isStrip=channel==='strip';
+        const auto=isStrip&&config.mode==='auto-color';
+        const stripColor=auto?rgb(payload.sampledColor):null;
+        return exclusive(async(selected,current,valid)=>{
+          if(!isStrip&&config.mode==='off'){logo=null;logoAt=Infinity;return active();}
+          const caps=await getCapabilities(selected,current,valid);
+          if(caps[isStrip?'sideLight':'logoLight']!==true)throw Error('未确认键盘支持这路灯光，未发送设置');
+          const at=clock(),settings=isStrip?renderStrip({strip:config},stripColor):logoSettings(config,at);
+          if(!await current.sendControl(isStrip?buildSideLightEffect(settings):buildLogoLightEffect(settings),valid)||!valid())throw Error('灯光操作已取消');
+          if(!isStrip){
+            logo=config.brightness>0&&config.mode!=='solid'?config:null;
+            lastLogoRGB=rgbKey(settings);lastLogoAt=at;logoAt=logo?nextLogo(logo,clock()):Infinity;
+            if(logo?.mode==='keyflash'&&lastLogoRGB!==0&&!Number.isFinite(logoAt))logoAt=clock();
           }
-        })();
-        controlPromise = operation;
-        try { return await operation; } finally { if (controlPromise === operation) controlPromise = null; }
+          return {...active(),submitted:true,...(auto?{sampledColor:settings.color}:{})};
+        });
       }
-      if (type === 'disconnect') {
-        await stop(); const closing = device; device = null; sender = null; lightingCapabilities = null;
-        if (closing?.opened) await closing.close();
-        return true;
+      if(type==='stop')return stop();
+      if(type==='disconnect'){
+        await stop();const closing=device;device=sender=capabilities=null;
+        if(closing?.opened)await closing.close();
+        return active();
       }
       throw Error('未知后台操作');
     }
-    return { command };
+    return {command};
   }
   function validateProject(value, keys) {
     if (!value || value.format !== 'hero99-light/v1') throw Error('不是 HERO99 Light 的配置文件');
@@ -569,15 +584,15 @@
       if (!Number.isFinite(s[name]) || s[name] < lo || s[name] > hi) throw Error('参数超出范围：' + name);
     }
     const palette = s.palette === undefined ? [s.color, s.bg] : s.palette;
-    if (!Array.isArray(palette) || palette.length < 2 || palette.length > 8) throw Error('配色需要 2–8 个颜色');
-    d.settings = { effect: s.effect, brightness: s.brightness, speed: s.speed, fps: Math.round(s.fps), color: rgb(s.color), bg: rgb(s.bg), palette: palette.map(rgb) };
+    d.settings = { effect: s.effect, brightness: s.brightness, speed: s.speed, fps: Math.round(s.fps), color: rgb(s.color), bg: rgb(s.bg), palette: validatePaletteColors(palette) };
     if (value.strip !== undefined) {
       const strip = value.strip;
-      if (!strip || !STRIP_MODES.includes(strip.mode) || !Number.isInteger(strip.brightness) || strip.brightness < 0 || strip.brightness > 4) throw Error('灯带配置无效');
+      if (!strip || (!STRIP_MODES.includes(strip.mode)&&!REMOVED_STRIP_MODES.has(strip.mode)) || !Number.isInteger(strip.brightness) || strip.brightness < 0 || strip.brightness > 4) throw Error('灯带配置无效');
       const gain = strip.gain === undefined ? 1 : strip.gain;
       if (!Number.isFinite(gain) || gain < 1 || gain > 2) throw Error('灯带鲜亮增强须为 100–200%');
-      d.strip = { mode: strip.mode, color: rgb(strip.color), brightness: strip.brightness, gain };
+      d.strip = { mode: REMOVED_STRIP_MODES.has(strip.mode)?'off':strip.mode, color: rgb(strip.color), brightness: strip.brightness, gain };
     }
+    if(value.logo!==undefined){const logo=value.logo;if(!logo||(!LOGO_MODES.includes(logo.mode)&&!LEGACY_LOGO_MODES.has(logo.mode))||!Number.isInteger(logo.brightness)||logo.brightness<0||logo.brightness>4)throw Error('Logo配置无效：关闭或四档亮度');d.logo={mode:LEGACY_LOGO_MODES.has(logo.mode)?'solid':logo.mode,color:rgb(logo.color),brightness:logo.brightness};}
     // v0.1/v0.1.1 used a different 99-position template. Migrate only that
     // exact legacy key set, never silently accept arbitrary incomplete frames.
     const legacy = value.layout === undefined;
@@ -597,13 +612,62 @@
     d.frames = value.frames.map(frame => migrate(frame, true));
     if (!Number.isFinite(value.frameMs) || value.frameMs < 25 || value.frameMs > 5000) throw Error('每帧时长须为 25–5000 毫秒');
     d.frameMs = Math.round(value.frameMs);
+    const durations=value.frameDurations;
+    if(durations!==undefined&&(!Array.isArray(durations)||(durations.length!==0&&durations.length!==d.frames.length)||durations.some(n=>!Number.isFinite(n)||n<25||n>5000)))throw Error('逐帧时长必须与动画帧一一对应，范围25–5000ms');
+    d.frameDurations=d.frames.map((_,i)=>Math.round(durations?.[i]??d.frameMs));
     return d;
   }
+  const geometryCache=new WeakMap();
+  const TAU=2*Math.PI, unit=n=>n-Math.floor(n), osc=n=>(1+Math.sin(n))*0.5;
+  const triangle=n=>1-Math.abs(unit(n)*2-1);
+  const band=(d,width)=>Math.max(0,1-Math.abs(d)/width);
+  function reactiveColor(s,key,impulses){
+    let level=0, phase=0;
+    for(const {x,y,age} of impulses){
+      const dx=(key.x-x)/1103,dy=(key.y-y)/325,ax=Math.abs(dx),ay=Math.abs(dy);
+      const fade=1-age/2.2;
+      let light;
+      switch(s.effect){
+        case 'key-echo': {
+          const r=Math.hypot(dx,dy*0.45),wave=age*0.46;
+          light=Math.max(band(r-wave,0.07),0.54*band(r-wave+0.19,0.065));break;
+        }
+        case 'column-flash': light=band(dx,0.034)*band(ay-age*0.75,0.38);break;
+        case 'row-flash': light=band(dy,0.12)*band(ax-age*0.55,0.19);break;
+        case 'key-comet': light=band(dy,0.19)*band(dx-age*0.48,0.15+age*0.1);break;
+        case 'key-splash': light=band(Math.abs(dx)-age*0.28,0.12)*band(dy+Math.sin(Math.min(age,1.6)*2)*0.38,0.28);break;
+        case 'key-spot': light=band(Math.hypot(dx,dy*0.45),0.17+age*0.1)**2*fade;break;
+        case 'key-confetti': {
+          const drift=0.13+unit(x*0.021+y*0.009)*0.32;
+          light=Math.max(band(dx+age*drift,0.09)*band(dy+age*0.36,0.26),
+            band(dx-age*0.45,0.11)*band(dy-age*0.32,0.25),
+            band(dx-age*0.05,0.08)*band(dy+Math.sin(age*2.5)*0.47,0.27));break;
+        }
+        case 'key-bloom': {
+          const petal=Math.min(Math.abs(dx-dy*0.52),Math.abs(dx+dy*0.52));
+          light=band(petal,0.075)*band(ax+ay*0.45-age*0.55,0.16);break;
+        }
+      }
+      const next=light*fade;
+      if(next>level){level=next;phase=x/1103+age*0.17+ax*0.44+ay*0.16;}
+    }
+    return level>0?mix(s.bg,paletteColor(s.palette,phase),level):s.bg;
+  }
   function render(project, keys, t, events = [], heat = {}, scale = true) {
-    const s = project.settings, time = t * s.speed, out = {}, maxX = Math.max(...keys.map(k => k.x + k.w));
-    const studio = project.frames.length ? project.frames[Math.floor(time * 1000 / project.frameMs) % project.frames.length] : null;
-    for (const key of keys) {
-      const x = (key.x + key.w / 2) / maxX, y = (key.y + key.h / 2) / 325;
+    const s = project.settings, time = t * s.speed, out = {};
+    const studio=s.effect==='studio'&&project.frames.length?project.frames[studioFrameAt(project,time)]:null;
+    const impulses=EXTRA_REACTIVE.has(s.effect)?events.slice(-16).map(e=>({...e,age:(t-e.t)*s.speed})).filter(e=>e.age>=0&&e.age<2.2):null;
+    const brightness=scale?s.brightness:1;
+    let geometry=geometryCache.get(keys);
+    if(!geometry){
+      const maxX=Math.max(...keys.map(k=>k.x+k.w));
+      geometry=keys.map(key=>{
+        const x=(key.x+key.w/2)/maxX,y=(key.y+key.h/2)/325,dx=x-0.5,dy=(y-0.5)*0.48;
+        return {key,x,y,dx,dy,radius:Math.hypot(dx,dy),angle:Math.atan2(dy,dx)/TAU};
+      });
+      geometryCache.set(keys,geometry);
+    }
+    for (const {key,x,y,dx,dy,radius,angle} of geometry) {
       let color = s.color;
       switch (s.effect) {
         case 'rainbow': color = hsv(x * 0.85 + y * 0.12 - time * 0.13); break;
@@ -685,6 +749,70 @@
           color = mix(s.bg, s.color, Math.exp(-(Math.hypot(x - px, (y - py) * 0.45) ** 2) * 120)); break;
         }
         case 'sunset': color = mix(s.bg, paletteColor(s.palette, y * 0.4 + x * 0.12 + Math.sin(time * 0.45) * 0.12), 0.65 + Math.sin(time * 0.6 + x * 3) * 0.35); break;
+        case 'color-tide': {
+          const edge=0.12+osc(time*1.65)*0.88, shore=x+Math.sin(y*5+time)*0.1;
+          color=mix(s.bg,paletteColor(s.palette,y*0.4+shore*0.36-time*0.07),clamp((edge-shore)*5+0.25,0.12,1));break;
+        }
+        case 'spectrum-sweep': {
+          const head=triangle(time*0.25),beam=band(x-head,0.27);
+          color=mix(s.bg,hsv(head*0.85+y*0.33+time*0.03),0.11+beam*0.89);break;
+        }
+        case 'pinwheel': {
+          const spin=angle-time*0.13,blade=Math.floor(unit(spin)*4);
+          color=mix(s.bg,paletteColor(s.palette,blade/4),0.18+0.82*triangle(spin*4));break;
+        }
+        case 'chase': {
+          const lane=Math.min(4,Math.floor(y*5)),progress=(lane%2?1-x:x)*0.72+lane*0.2;
+          color=mix(s.bg,paletteColor(s.palette,progress*0.8+time*0.13),Math.max(0,1-unit(time*0.63-progress)/0.21)**2);break;
+        }
+        case 'splitwave': {
+          const wave=triangle(Math.abs(dx)*3.5+y*0.21-time*0.49);
+          color=mix(s.bg,paletteColor(s.palette,(x<0.5?0:0.52)+y*0.24),0.1+0.9*wave**2);break;
+        }
+        case 'rowrelay': {
+          const row=Math.min(4,Math.floor(y*5)),phase=time*0.55-row/5;
+          color=mix(s.bg,paletteColor(s.palette,row/5+x*0.16),triangle(phase)**3);break;
+        }
+        case 'lasergrid': {
+          const a=triangle(x*3+y*0.54-time*0.55)**5,b=triangle(y*1.7-x*0.7-time*0.46)**5;
+          color=mix(s.bg,paletteColor(s.palette,a>=b?0.16:0.56),Math.max(a,b));break;
+        }
+        case 'waterfall': {
+          const phase=y-time*0.58+0.11*Math.sin(x*22);
+          color=mix(s.bg,paletteColor(s.palette,x*0.5+time*0.04),0.18+0.82*triangle(phase*1.8)**3);break;
+        }
+        case 'duotone': color=mix(s.palette[0],s.palette.at(-1),clamp(dx*12+0.5,0,1));break;
+        case 'topography': {
+          const height=0.55*osc(x*10+y*3)+0.45*osc(y*7-x*8),tier=Math.min(s.palette.length-1,Math.floor(height*s.palette.length));
+          color=s.palette[tier];break;
+        }
+        case 'embers': {
+          const drift=osc(time*0.87+key.id*1.77),glow=osc(time*0.57+x*8-y*6);
+          color=mix(s.bg,paletteColor(s.palette,drift*0.48),0.1+0.8*drift**4*glow);break;
+        }
+        case 'moonphase': {
+          const edge=(osc(time*0.86)*2-1)*0.28;
+          color=mix(s.bg,paletteColor(s.palette,0.24+radius*0.58),band(radius,0.47)*clamp((dx-edge)*10+0.55,0.08,1));break;
+        }
+        case 'ocean': {
+          const swell=(osc(y*9+x*4-time*1.2)+osc(y*5-x*11+time*0.85))/2;
+          color=mix(s.bg,paletteColor(s.palette,swell*0.65),0.26+swell*0.65);break;
+        }
+        case 'kaleido': {
+          const fold=triangle(angle*6);
+          color=mix(s.bg,paletteColor(s.palette,fold*0.42+radius*1.35-time*0.11),0.45+0.55*triangle(radius*3-fold*0.32-time*0.17));break;
+        }
+        case 'lanterns': {
+          const pole=Math.floor(x*5),phase=osc(time*0.96-pole*1.25);
+          color=mix(s.bg,paletteColor(s.palette,pole*0.19),0.11+0.89*phase*band(y-0.43-0.16*Math.sin(time+pole),0.57));break;
+        }
+        case 'heartwave': {
+          const phase=unit(time*0.84-radius*0.68),pulse=Math.max(band(phase-0.18,0.13),0.62*band(phase-0.42,0.15));
+          color=mix(s.bg,paletteColor(s.palette,0.12+radius*0.65),0.11+pulse*0.76);break;
+        }
+        case 'key-echo': case 'column-flash': case 'row-flash': case 'key-comet':
+        case 'key-splash': case 'key-spot': case 'key-confetti': case 'key-bloom':
+          color=reactiveColor(s,key,impulses);break;
         case 'sparkburst':
         case 'keycross': {
           let level = 0, phase = 0;
@@ -702,7 +830,7 @@
         case 'studio': color = studio ? studio[key.id] : s.bg; break;
       }
       if (s.effect !== 'studio' && project.paint[key.id]) color = project.paint[key.id];
-      out[key.id] = color.map(c => byte(c * (scale ? s.brightness : 1)));
+      out[key.id] = color.map(c => byte(c * brightness));
     }
     return out;
   }
@@ -723,5 +851,5 @@
     if (bits !== REPORT_BYTES * 8) throw Error('固件的 Report 9 长度与已分析协议不符，已拒绝发送');
     return true;
   }
-  return { REPORT_ID, REPORT_BYTES, PAYLOAD_BYTES, OUTPUT_POLICY, LINK_POLICY, STRIP_POLICY, EFFECTS, STRIP_MODES, FRAME_STRIP_MODES, PRESETS, byte, rgb, hsv, mix, paletteColor, buildPackets, prepareOutput, frameInterval, createSender, buildLightingQuery, parseLightingCapabilities, buildSideLightEffect, createLightingProbe, createOutputEngine, defaultProject, validateProject, render, renderStrip, validateDevice };
+  return {REPORT_ID,REPORT_BYTES,PAYLOAD_BYTES,OUTPUT_POLICY,EFFECTS,EXTRA_EFFECTS,STRIP_MODES,LOGO_MODES,REACTIVE_EFFECTS,PRESETS,MAX_SAVED_PALETTES,validatePaletteLibrary,isNativeStrip,byte,rgb,hsv,mix,paletteColor,dominantColor,buildPackets,prepareOutput,frameInterval,frameDurations,studioFrameAt,createSender,buildLightingQuery,parseLightingCapabilities,buildSideLightEffect,buildLogoLightEffect,renderLogo,createLightingProbe,createOutputEngine,defaultProject,validateProject,render,renderStrip,validateDevice,isAnimated,recordPress};
 });

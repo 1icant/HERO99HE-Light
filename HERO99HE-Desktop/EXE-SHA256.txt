@@ -1,3 +1,241 @@
+HERO99HE-Light-Studio-0.3.3-win-x64.zip
+9BF5659257B155D725AE44F2CC337D2E73A535AF46D95D043595F31B3D13B643
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.3.3)
+A33D8F81F40BB9BA5C8413F5DD386E06E8C28A6E14E5804E9735C60D705CFF20
+
+Extracted folder / resources/app.asar
+B18F5503BCDA712CA98FCE3DC4CBDD630C6850208E5592CDDC303238CC5C8A92
+
+Historical release:
+HERO99HE-Light-Studio-0.3.2-win-x64.zip
+49C9C7C1688B06EBCB1F884E63DA8C50B046668404AD15A4396A9F0DD24FC2DF
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.3.2)
+CD268C1BFC26A2DB0CADA1D7C0172473883605D979E9250CDC818B0CD37E6801
+
+Extracted folder / resources/app.asar
+6A4E3CDE145E37D6C3B40E6216FE02B2ECE21F016FFC43A4A9CFD68E19566470
+
+Historical release:
+HERO99HE-Light-Studio-0.3.1-win-x64.zip
+C28033974D1D03C4814CABFB8AA832592975575D592C48CA51A4A465A63D5A75
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.3.1)
+B8BBA6FFA651B14ABB16536E41FE9057D32E8A1A871354AA469838487B3F506E
+
+Extracted folder / resources/app.asar
+EA7BA8ED1CBA7B2D6A2040D55E407A6DDB6ED507EDFA543CAD7D5DB27F4A33C1
+
+Historical release:
+HERO99HE-Light-Studio-0.3.0-win-x64.zip
+A92FD8E74FE97E7210606CF2C56A8499451B1D2A3E80ACABCC2737992318E3E4
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.3.0)
+92CE1997288539A7F3A81673925E2FF9FD5E451024BF8898C81FC097F85A6F82
+
+Extracted folder / resources/app.asar
+59225B71FF168382612D8CA58913E76D3F2A8E7DC0A7DED3FCFBBC47E97023EC
+
+Historical release:
+HERO99HE-Light-Studio-0.2.13-win-x64.zip
+BA8CBB485E5DCA86FAD496E7759F87DD7FB37D1D65422025607D491C1D38E2F9
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.13)
+F0CC96A1F1806CBC2E984508C62B7A5116BC1C160BB47EE08DE4C942752BD402
+
+Extracted folder / resources/app.asar
+D9D254CFC50CA5277BDCAFE1D3893256F85AA746D4FDA45CFCD5348BFFB51E42
+
+Historical release:
+HERO99HE-Light-Studio-0.2.12-win-x64.zip
+9283E724EEB793703D08F911BA59B1D6A38E4C0EC148CFBF217F0D115553558E
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.12)
+08D719A090EAB3CF590416DC1317912C0762A77534DEE5BF45ABF41EF700EB59
+
+Extracted folder / resources/app.asar
+0D28B612F6A81E3080CABDE05C785A9CB9D062512CE471D6238E52661B104F7A
+
+Historical release:
+HERO99HE-Light-Studio-0.2.11-win-x64.zip
+6CEE547A28DFCFFFD769569334480643DC69CE745C81DBD903C1CED8FE842E48
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.11)
+BCCB6B67189CA601F81C44D1AF53B1FBD61A458058F2A4CF9D47FB31BCFECCEA
+
+Extracted folder / resources/app.asar
+5FC9B0D5EEFF3282952783029A42C6262E83957D6F0FEE3D7C02E1D4C0682097
+
+Historical release:
+HERO99HE-Light-Studio-0.2.10-win-x64.zip
+22E28B624C1546E6FA65D0A7B595FE449001F1D050B13BB8BCAEEB8D66E14423
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.10)
+C6F9E0C17580E699A890842E6A177BC0B0A20C9FEBD5E874BB6EED0A731E5772
+
+Extracted folder / resources/app.asar
+C77D2C697D152FC3FF3EE73B33B470DF39A6FEAC0296BF13586A179D3CD4164B
+
+Historical release:
+HERO99HE-Light-Studio-0.2.9-win-x64.zip
+Size: 154196554 bytes
+SHA256: 434028740B4DD607FB8133A4A86AA0D8ED5A78353A52DB3DE9C2430747D1F718
+7-Zip integrity: Everything is Ok (78 files, 4 folders; one release root)
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.9)
+Size: 249832448 bytes
+SHA256: C63134D45BE7FAB802B128E61CD34849062FA0B38C9627E508E561D5650B7873
+Signature: NotSigned (no publisher certificate)
+
+resources/app.asar
+Size: 193277 bytes
+SHA256: EA2AA8E0EB12DFB169727527A662AE60706C0DC91AB5BA48DA701BE050D56C15
+Packaged sources match release source byte for byte; app version 0.2.9.
+
+resources/native/HeroKeyInput.exe
+Size: 12800 bytes
+SHA256: 9DC1B688B1331CF473EEAB3AC598C15DFDA8BB0F5227475B1FB33AD70E14DCD9
+Unchanged helper; packaged --self-test passed without starting input listeners.
+Native C# and reactive.cjs hashes unchanged from v0.2.8.
+189 software tests passed; hidden Electron smoke passed, no device requests.
+No real HID writes, keyboard polling or input listeners during release tests.
+Empty response handling is repaired; actual Esc and spatial strip behavior remain unverified.
+
+Historical v0.2.8 folder distribution (preserved separately):
+HERO99HE-Light-Studio-0.2.8-win-x64.zip
+Size: 154195964 bytes
+SHA256: 1491F4CD66A0394490CF5A8472016675071AEA6126FF8F54EA2CC4868DC62B9E
+7-Zip integrity: see final archive verification (78 files, 4 folders)
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.8)
+Size: 249832448 bytes
+SHA256: 54097B5CA8AE736FAB567FDFE7F9C8FB0D571ADB8D1F264F6AFF36A75BC46744
+Signature: NotSigned (no publisher certificate)
+
+resources/app.asar
+Size: 191544 bytes
+SHA256: 25DFE62311AA9DFF0E9958AD23E328C9ECE16753EC53EF307A246627D9E6CFCB
+Packaged sources match release source byte for byte; app version 0.2.8.
+
+resources/native/HeroKeyInput.exe
+Size: 12800 bytes
+SHA256: 9DC1B688B1331CF473EEAB3AC598C15DFDA8BB0F5227475B1FB33AD70E14DCD9
+Unchanged helper; packaged --self-test passed, no input listener started.
+Native C# and reactive.cjs remain identical to v0.2.5.
+180 software tests passed; hidden Electron smoke passed with zero device requests.
+No real HID writes, Raw Input listener or keyboard polling during release tests.
+Esc and native side-light spatial behavior remain unverified on hardware.
+
+Historical v0.2.7 folder distribution (preserved separately):
+HERO99HE-Light-Studio-0.2.7-win-x64.zip
+Size: 154191217 bytes
+SHA256: E66CE590401502FB9CB1896ED33B0241B94E347D6F164EEFF1C30246F13B3575
+7-Zip integrity: Everything is Ok (78 files, 4 folders; one release root)
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.7)
+Size: 249832448 bytes
+SHA256: 2D7F1B6AAFDB383904F6759D0C52D5F918D88B61E1955CDF53F03C249AED3D86
+Signature: NotSigned (no publisher certificate)
+
+resources/app.asar
+Size: 175942 bytes
+SHA256: 6807D39601BC709F4183A49A39B3D2D23C86EF56098841A2F22285526AE53A41
+Packaged sources match the release source byte for byte; app version 0.2.7.
+
+resources/native/HeroKeyInput.exe
+Size: 12800 bytes
+SHA256: 9DC1B688B1331CF473EEAB3AC598C15DFDA8BB0F5227475B1FB33AD70E14DCD9
+Unchanged v0.2.5 helper; packaged --self-test passed, no input listener started.
+Native source and reactive.cjs remain identical to v0.2.5.
+173 software tests and the final hidden Electron smoke passed.
+No real input listener, polling or HID writes started during release testing.
+Esc remains unresolved; 113 presets are manual test candidates, not verified fixes.
+Keep the entire extracted folder together. Do not run inside the ZIP.
+
+Historical v0.2.6 folder distribution (preserved separately):
+HERO99HE-Light-Studio-0.2.6-win-x64.zip
+Size: 154186845 bytes
+SHA256: ED8F77FC3287E653F0FA82E523ACE1E741D94AB4D49A9C61C5CEEFCB1CC05E17
+7-Zip integrity: Everything is Ok (77 files, 4 folders; one release root)
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.6)
+Size: 249832448 bytes
+SHA256: 23A3F836C72C5DD5D8F6E80D232B21EAB0382C52C7DE0882BF17CAAC78D4D5D6
+Signature: NotSigned (no publisher certificate)
+
+resources/app.asar
+Size: 171301 bytes
+SHA256: AE1033762FA13FC0641C7AF56637590595A6CB25D40CDD31B983120C01C73260
+Packaged sources match the release source byte for byte; app version 0.2.6.
+
+resources/native/HeroKeyInput.exe
+Size: 12800 bytes
+SHA256: 9DC1B688B1331CF473EEAB3AC598C15DFDA8BB0F5227475B1FB33AD70E14DCD9
+Unchanged v0.2.5 helper; packaged --self-test passed, no input listener started.
+Native source and reactive.cjs remain identical to v0.2.5.
+No real input listener, polling or HID writes started during this release testing.
+Keep the entire extracted folder together. Do not run inside the ZIP.
+
+Historical v0.2.5 folder distribution (preserved separately):
+HERO99HE-Light-Studio-0.2.5-win-x64.zip
+Size: 154185490 bytes
+SHA256: 0805194220DA477E5673DA9389C286982F2FCB33E1F61B7EE4A1DB3E8C9B68AF
+7-Zip integrity: Everything is Ok (77 files, 4 folders; one release root)
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.5)
+Size: 249832448 bytes
+SHA256: B29DB638FD4D0881B68370C3E486462272E3A21E289A4269E53EA0D47DBB51EF
+Signature: NotSigned (no publisher certificate)
+
+resources/app.asar
+SHA256: 92BBA9C8ADA63C621C609F14149478829E6EC48783F8D229AF63A0EC8D2F6234
+Packaged sources match the release source byte for byte; app version 0.2.5.
+
+resources/native/HeroKeyInput.exe
+Size: 12800 bytes
+SHA256: 9DC1B688B1331CF473EEAB3AC598C15DFDA8BB0F5227475B1FB33AD70E14DCD9
+Signature: NotSigned
+Recompiled from unchanged v0.2.4 native source; packaged --self-test passed.
+No real input listener, polling or HID writes started during this release testing.
+Keep the entire extracted folder together. Do not run inside the ZIP.
+
+Historical v0.2.4 folder distribution (preserved separately):
+HERO99HE-Light-Studio-0.2.4-win-x64.zip
+Size: 154179626 bytes
+SHA256: 14C13134C7FF65E4E88F43FA54E1028DF3460C972827BDF54507F6A4F349387A
+7-Zip integrity: Everything is Ok (77 files, 4 folders)
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.4)
+Size: 249832448 bytes
+SHA256: 35117722386644597097FE2D138B96E383CC0C71FEDC8E2C11A3CB71D835E26E
+Signature: NotSigned (no publisher certificate)
+
+resources/native/HeroKeyInput.exe
+Size: 12800 bytes
+SHA256: A8C18E1C62CE7F26A45ED4B64DF7A02292CC56CE81163C2F8E86AF63C6567903
+Signature: NotSigned
+Packaged --self-test passed; no input listener or polling started.
+Keep the entire extracted folder together. Do not run inside the ZIP.
+
+Historical v0.2.3 folder distribution (preserved separately):
+HERO99HE-Light-Studio-0.2.3-win-x64.zip
+Size: 154172156 bytes
+SHA256: 37004577E6F9F93F9A5679B5831E8F40E03B7EE6C569C73E970C685AADEAD88F
+7-Zip integrity: Everything is Ok (76 files, 4 folders)
+
+Extracted folder / HERO99HE Light Studio.exe (app v0.2.3)
+Size: 249832448 bytes
+SHA256: A936F65D05CD9B19F374E830815B8C9A6AFBC40DE581521227AC2CDBF1B30130
+Signature: NotSigned (no publisher certificate)
+
+resources/native/HeroKeyInput.exe
+Size: 10752 bytes
+SHA256: B26F6EC1FEB4463EDBD6F6473990F6F26886FE6BFF6873793BED0B72F27A1AE3
+Packaged --self-test passed; no input listener started.
+Keep the entire extracted folder together. Do not run inside the ZIP.
+
+Historical v0.2.2 folder distribution (preserved separately):
 HERO99HE-Light-Studio-0.2.2-win-x64.zip
 Size: 162432585 bytes
 SHA256: 8269824E38AAE0EDB56F382C0F19EF8ACC3F1FE68D1F4B31060A3F70594583D8

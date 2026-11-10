@@ -1,15 +1,16 @@
 {
   "name": "hero99he-light-desktop",
-  "version": "0.2.2",
+  "version": "0.3.3",
   "private": true,
   "description": "HERO 99HE local lighting studio with background tray operation",
   "author": "HERO Light Studio",
   "main": "main.cjs",
   "scripts": {
     "prepare-web": "node scripts/sync-web.cjs && node scripts/create-icon.cjs",
-    "start": "electron .",
+    "build-input": "node scripts/build-input.cjs",
+    "start": "node scripts/sync-web.cjs && node scripts/build-input.cjs && electron .",
     "test": "node --test tests/*.test.cjs",
-    "dist": "electron-builder --dir --win --x64"
+    "dist": "node scripts/sync-web.cjs && node scripts/build-input.cjs && electron-builder --dir --win --x64"
   },
   "devDependencies": {
     "electron": "45.2.3",
@@ -21,10 +22,11 @@
     "asar": true,
     "npmRebuild": false,
     "directories": { "output": "dist" },
-    "files": ["main.cjs", "preload.cjs", "policy.cjs", "web/**/*", "assets/**/*", "package.json"],
+    "files": ["main.cjs", "preload.cjs", "policy.cjs", "reactive.cjs", "web/**/*", "assets/**/*", "package.json"],
+    "extraResources": [{"from":"native/HeroKeyInput.exe","to":"native/HeroKeyInput.exe"}],
     "win": {
       "icon": "assets/icon.ico",
-      "signAndEditExecutable": false,
+      "signExecutable": false,
       "requestedExecutionLevel": "asInvoker",
       "artifactName": "HERO99HE-Light-Studio-${version}-win-x64.exe"
     }

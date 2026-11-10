@@ -1,0 +1,11 @@
+'use strict';
+const {spawnSync}=require('node:child_process');
+const fs=require('node:fs'),path=require('node:path');
+const compiler=path.join(process.env.WINDIR||'C:/Windows','Microsoft.NET/Framework64/v4.0.30319/csc.exe');
+if(process.platform!=='win32'||!fs.existsSync(compiler))throw Error('Windows x64 .NET Framework compiler required for Raw Input helper');
+const root=path.resolve(__dirname,'..','native');
+const result=spawnSync(compiler,['/nologo','/optimize+','/target:exe','/platform:x64','/reference:System.Windows.Forms.dll','/out:'+path.join(root,'HeroKeyInput.exe'),path.join(root,'HeroKeyInput.cs')],{encoding:'utf8',windowsHide:true});
+if(result.status!==0)throw Error(result.stdout+result.stderr);
+const test=spawnSync(path.join(root,'HeroKeyInput.exe'),['--self-test'],{encoding:'utf8',windowsHide:true});
+if(test.status!==0)throw Error('Native mapping self-test failed');
+console.log(test.stdout.trim());

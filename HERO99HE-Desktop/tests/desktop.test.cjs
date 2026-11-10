@@ -12,8 +12,8 @@ function device(overrides = {}) {
 }
 function rig({ locked = true } = {}) {
   const app = new EventEmitter(), ipcMain = new EventEmitter(), ses = new EventEmitter();
-  const state = { dialogs: [], windows: [], menus: [], exits: [], schemes: [] };
-  Object.assign(app, { setName() {}, requestSingleInstanceLock: () => locked, quit() { state.quits = (state.quits || 0) + 1; },
+  const state = { dialogs: [], windows: [], menus: [], exits: [], schemes: [], inputContexts: [] };
+  Object.assign(app, { setName() {}, getVersion:()=>require('../package.json').version, requestSingleInstanceLock: () => locked, quit() { state.quits = (state.quits || 0) + 1; },
     whenReady: async () => {}, exit(code) { state.exits.push(code); } });
   ses.protocol = { handle(scheme, handler) { state.handler = handler; assert.equal(scheme, 'hero-light'); } };
   ses.setPermissionCheckHandler = handler => { state.check = handler; };
@@ -23,11 +23,12 @@ function rig({ locked = true } = {}) {
     constructor(options) {
       super(); this.options = options; this.hidden = true; this.destroyed = false; this.webContents = new EventEmitter();
       Object.assign(this.webContents, { isDestroyed: () => this.destroyed, getURL: () => P.ENTRY,
-        setWindowOpenHandler: fn => { state.openHandler = fn; }, send: channel => { state.sent = channel; } });
+        setWindowOpenHandler: fn => { state.openHandler = fn; }, send: (channel,value) => { state.sent = channel;state.sentValue=value; } });
       state.windows.push(this);
     }
-    isDestroyed() { return this.destroyed; } isMinimized() { return false; }
-    show() { this.hidden = false; } focus() {} hide() { this.hidden = true; } restore() {}
+    isDestroyed() { return this.destroyed; } isMinimized() { return Boolean(this.minimized); } isFocused() { return !this.hidden; }
+    isVisible(){return !this.hidden;}
+    show() { this.hidden = false;this.emit('show'); } focus() {} hide() { this.hidden = true;this.emit('hide'); } restore() {this.minimized=false;this.emit('restore');}
     removeMenu() {} async loadURL(url) { state.loaded = url; this.emit('ready-to-show'); }
   }
   class Tray extends EventEmitter {
@@ -42,7 +43,8 @@ function rig({ locked = true } = {}) {
     dialog: { showErrorBox(title, message) { throw Error(title + message); },
       async showMessageBox(win, options) { state.dialogs.push(options); return { response: state.response ?? options.cancelId ?? 0 }; } }
   };
-  const context = { require: name => name === 'electron' ? electron : name === './policy.cjs' ? P : require(name),
+  const reactiveMock={createReactiveInput(options){state.inputOptions=options;return{setContext:value=>state.inputContexts.push(value),reset:()=>{state.inputResets=(state.inputResets||0)+1;},dispose:()=>{state.inputDisposed=true;}};}};
+  const context = { require: name => name === 'electron' ? electron : name === './policy.cjs' ? P : name==='./reactive.cjs'?reactiveMock:require(name),
     __dirname: root, Response, setTimeout, clearTimeout, URL, console };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'main.cjs'), 'utf8'), context);
   return { app, ipcMain, ses, state, async ready() { for (let i = 0; i < 20; i++) await Promise.resolve(); } };
@@ -66,7 +68,13 @@ test('desktop bundle preserves the working core, effects, layout and web interac
     assert.deepEqual(fs.readFileSync(path.join(root, 'web', file)), fs.readFileSync(path.join(root, '..', 'HERO99HE-Light', file)));
   }
   const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
-  assert.match(html, /desktop.js\?v=0.2.2/); assert.doesNotMatch(html, /\b(?:src|href)=["']https?:\/\//);
+  const {version}=require('../package.json');
+  assert.ok(html.includes('desktop.js?v='+version)); assert.doesNotMatch(html, /\b(?:src|href)=["']https?:\/\//);
+  assert.deepEqual(fs.readFileSync(path.join(root,'web/desktop.js')),fs.readFileSync(path.join(root,'desktop.js')));
+  const fsPackage=require('../package.json');
+  assert.match(fsPackage.scripts.dist,/^node scripts\/sync-web\.cjs /);
+  assert.equal(fsPackage.build.win.signExecutable,false);
+  assert.notEqual(fsPackage.build.win.signAndEditExecutable,false);
 });
 test('window is sandboxed and retains its renderer rather than destroying it on close', async () => {
   const r = rig(); await r.ready(); const win = r.state.windows[0];
@@ -76,7 +84,12 @@ test('window is sandboxed and retains its renderer rather than destroying it on 
   assert.equal(prefs.backgroundThrottling, false); assert.equal(prefs.webSecurity, true);
   let prevented = false; win.emit('close', { preventDefault() { prevented = true; } });
   assert.ok(prevented); assert.ok(win.hidden); assert.equal(win.destroyed, false); assert.equal(r.state.exits.length, 0);
+  assert.equal(r.state.sent,'desktop:preview-visible');assert.equal(r.state.sentValue,false);
   assert.ok(r.state.balloon); r.state.menu[0].click(); assert.equal(win.hidden, false);
+  assert.ok(r.state.tooltip.includes('v'+require('../package.json').version));
+  assert.equal(r.state.sentValue,true);
+  win.minimized=true;win.emit('minimize');assert.equal(r.state.sentValue,false);
+  win.restore();assert.equal(r.state.sentValue,true);
 });
 test('unknown permissions, remote origins, remote navigation and popups are denied', async () => {
   const r = rig(); await r.ready(); const contents = r.state.windows[0].webContents;
@@ -96,7 +109,7 @@ test('device selection requires an explicit dialog choice; cancel never grants a
 });
 test('tray Stop asks renderer to drain output; Exit waits for stop acknowledgement', async () => {
   const r = rig(); await r.ready(); const contents = r.state.windows[0].webContents;
-  r.ipcMain.emit('desktop:running', { sender: contents }, true); assert.match(r.state.tooltip, /后台运行/);
+  r.ipcMain.emit('desktop:input-context', { sender: contents }, {running:true}); assert.match(r.state.tooltip, /后台运行/);
   r.state.menu[1].click(); assert.equal(r.state.sent, 'desktop:stop');
   r.ipcMain.emit('desktop:stopped', { sender: contents }); await r.ready();
   assert.equal(r.state.exits.length, 0); assert.match(r.state.tooltip, /尚未输出/);
@@ -107,6 +120,15 @@ test('tray Stop asks renderer to drain output; Exit waits for stop acknowledgeme
 });
 test('a second process creates no window or tray', async () => {
   const r = rig({ locked: false }); await r.ready(); assert.equal(r.state.quits, 1); assert.equal(r.state.windows.length, 0); assert.equal(r.state.tray, undefined);
+});
+
+test('background input context requires the local renderer and stops on tray Stop or renderer loss',async()=>{
+  const r=rig();await r.ready();const win=r.state.windows[0],event={sender:win.webContents};
+  r.ipcMain.emit('desktop:input-context',{sender:{getURL:()=>P.ENTRY}},{enabled:true,running:true,reactive:true});assert.equal(r.state.inputContexts.length,0);
+  r.ipcMain.emit('desktop:input-context',event,{enabled:true,running:true,reactive:true});assert.equal(r.state.inputContexts.at(-1).active,true);
+  assert.equal(r.state.inputContexts.at(-1).backend,'raw');r.ipcMain.emit('desktop:input-context',event,{enabled:true,running:true,reactive:true,backend:'poll'});assert.equal(r.state.inputContexts.at(-1).backend,'poll');
+  r.state.menu[1].click();assert.equal(r.state.inputContexts.at(-1).active,false);r.ipcMain.emit('desktop:stopped',event);await r.ready();
+  win.webContents.emit('render-process-gone');assert.equal(r.state.inputContexts.at(-1).active,false);
 });
 
 test('bundled responses carry CSP and allow query-versioned worker scripts without exposing shell files', async () => {
@@ -122,8 +144,10 @@ test('desktop page bridge waits for Stop promise before acknowledging drain', as
   const pending=new Promise(resolve=>{finish=resolve;});
   const bridge={version:'test',onStop(fn){listener=fn;},stopped(){stopped++;},setRunning(){}};
   const elements={status:{classList:{contains:()=>false}},stop:{onclick:()=>pending}};
-  const document={querySelector:()=>null,getElementById:id=>elements[id]};
+  const version={textContent:'v0.1.26'};
+  const document={querySelector:selector=>selector==='.brand small span'?version:null,getElementById:id=>elements[id]};
   vm.runInNewContext(fs.readFileSync(path.join(root,'desktop.js'),'utf8'),{window:{HeroDesktop:bridge},document,
     MutationObserver:class{observe(){}}});
+  assert.equal(version.textContent,'桌面版 vtest · Web v0.1.26');
   const stop=listener(); await Promise.resolve(); assert.equal(stopped,0); finish(); await stop; assert.equal(stopped,1);
 });

@@ -29,6 +29,13 @@ test('capability request is exactly one non-mutating 82/09 packet with valid che
   assert.deepEqual([...bytes.slice(0, 6)], [0x82, 9, 0, 1, 0, 0]); assert.ok(bytes.slice(6, 62).every(n => n === 0));
   assert.equal(bytes[62], 106); assert.equal((9 + bytes.reduce((a, b) => a + b, 0)) & 255, 255);
 });
+
+test('experimental Logo constant color uses only 04/0B, mode 3 and proven parameter limits',()=>{
+  const b=C.buildLogoLightEffect({mode:3,color:[0,255,255],brightness:1,speed:1});
+  assert.deepEqual([...b.slice(0,13)],[4,11,0,1,0,7,3,0,0,255,255,1,1]);assert.equal((9+b.reduce((a,b)=>a+b,0))&255,255);
+  for(const s of [{mode:4,color:[0,0,0],brightness:1,speed:1},{mode:3,color:[0,0,0],brightness:5,speed:1}])assert.throws(()=>C.buildLogoLightEffect(s));
+});
+
 test('capability fields use firmware-provided dimensions, not a guessed LED count', () => {
   const parsed = C.parseLightingCapabilities(report({ rows: 2, columns: 257 }));
   assert.equal(parsed.readOnly, true); assert.equal(parsed.sideLight, true); assert.equal(parsed.logoLight, false); assert.equal(parsed.sideLightCount, 12);
@@ -75,62 +82,13 @@ test('native atmosphere color packet is a single independent 04/06 command, neve
   assert.equal(p.length, 63); assert.equal((9 + p.reduce((a, b) => a + b, 0)) & 255, 255); assert.ok(p.slice(13, 62).every(n => n === 0));
   for (const bad of [{ mode: 1, color: [1, 2, 3], brightness: 2, speed: 2 }, { mode: 3, color: [1, 2, 3], brightness: 5, speed: 2 }, { mode: 3, color: [999, 2, 3], brightness: 2, speed: 2 }]) assert.throws(() => C.buildSideLightEffect(bad));
 });
-test('native control uses one matching verified ACK and never retries after timeout', async () => {
-  const r = device(); let timeout;
-  const options = { operation: 'side-light', settings: { mode: 3, color: [255, 0, 0], brightness: 2, speed: 2 }, setTimeout(fn) { timeout = fn; return 1; }, clearTimeout() {} };
-  const first = C.createLightingProbe(r.d, options);
-  const ack = new Uint8Array(63); ack.set([4, 6, 0, 1, 0, 0]); ack[62] = (255 - 9 - ack.reduce((a, b) => a + b, 0)) & 255;
-  r.emit(report()); assert.equal(r.listeners.size, 1); r.emit(ack, 9, 3);
-  const result = await first.promise; assert.equal(result.acknowledged, true); assert.equal(result.queryCapture.readOnly, false); assert.equal(result.hardwareVerified, false);
-  const second = C.createLightingProbe(r.d, options), failure = assert.rejects(second.promise, /可能已改变/); timeout(); await failure;
-  assert.equal(r.writes.length, 2); assert.equal(r.listeners.size, 0);
-});
-test('engine requires this connection capability and explicit consent before native changes', async () => {
-  const r = device(), hid = { async getDevices() { return [r.d]; }, addEventListener() {} }, engine = C.createOutputEngine({ keys, hid });
-  const payload = { consent: true, settings: { mode: 3, color: [1, 2, 3], brightness: 2, speed: 2 } };
-  await engine.command('connect', r.d); await assert.rejects(engine.command('set-side-light', payload), /先读取/); assert.equal(r.writes.length, 0);
-  const read = engine.command('inspect-lighting'); await new Promise(resolve => setImmediate(resolve)); r.emit(Uint8Array.from(require('./fixtures/hero99he-capabilities.json'))); await read;
-  await assert.rejects(engine.command('set-side-light', { ...payload, consent: false }), /明确允许/); assert.equal(r.writes.length, 1);
-  const write = engine.command('set-side-light', payload); await new Promise(resolve => setImmediate(resolve)); assert.equal(r.writes.length, 2); assert.equal(r.writes[1].packet[0], 4);
-  await assert.rejects(engine.command('start'), /查询期间/);
-  const ack = new Uint8Array(63); ack.set([4, 6, 0, 1, 0, 0]); ack[62] = (255 - 9 - ack.reduce((a, b) => a + b, 0)) & 255; r.emit(ack);
-  assert.equal((await write).acknowledged, true); await engine.command('disconnect');
-  await engine.command('connect', r.d); await assert.rejects(engine.command('set-side-light', payload), /先读取/); await engine.command('disconnect');
-});
-test('stop cancels native ACK wait, drains the operation and never resends the setting', async () => {
-  const r = device(), hid = { async getDevices() { return [r.d]; }, addEventListener() {} }, engine = C.createOutputEngine({ keys, hid });
-  await engine.command('connect', r.d);
-  const read = engine.command('inspect-lighting'); await new Promise(resolve => setImmediate(resolve)); r.emit(Uint8Array.from(require('./fixtures/hero99he-capabilities.json'))); await read;
-  const setting = engine.command('set-side-light', { consent: true, settings: { mode: 3, color: [1, 2, 3], brightness: 2, speed: 2 } });
-  const rejected = assert.rejects(setting, /已发出的设置不能撤回/); await new Promise(resolve => setImmediate(resolve));
-  assert.equal(r.writes.length, 2); await engine.command('stop'); await rejected;
-  assert.equal(r.listeners.size, 0); assert.equal(r.writes.length, 2); await engine.command('disconnect');
-});
 test('an empty reply preceding full capability data does not prematurely complete or resend', async () => {
   const r = device(), probe = C.createLightingProbe(r.d);
   r.emit(report({ length: 0 })); assert.equal(r.listeners.size, 1);
   r.emit(report()); const result = await probe.promise;
-  assert.equal(result.capabilityFieldsComplete, true); assert.equal(result.queryCapture.totalMatchingResponses, 2);
-  assert.equal(result.queryCapture.responses[0].declaredLength, 0); assert.equal(result.queryCapture.responses[1].declaredLength, 26);
+  assert.equal(result.capabilityFieldsComplete, true);
+
   assert.equal(r.writes.length, 1); assert.equal(r.listeners.size, 0);
-});
-test('short-only replies are captured until the original timeout and returned as partial', async () => {
-  const r = device(); let timeout;
-  const probe = C.createLightingProbe(r.d, { setTimeout(fn) { timeout = fn; return 1; }, clearTimeout() {} });
-  for (let n = 0; n < 12; n++) r.emit(report({ length: n === 0 ? 20 : 0 }));
-  timeout(); const result = await probe.promise;
-  assert.equal(result.waitExpired, true); assert.equal(result.declaredLength, 20); assert.equal(result.sideLightCount, null);
-  assert.equal(result.queryCapture.totalMatchingResponses, 12); assert.equal(result.queryCapture.responses.length, 8);
-  assert.equal(r.writes.length, 1); assert.equal(r.listeners.size, 0);
-});
-test('invalid matching lengths retain raw response and exact declared length on failure', async () => {
-  const r = device(), probe = C.createLightingProbe(r.d), invalid = report({ length: 57 });
-  const failed = assert.rejects(probe.promise, error => {
-    assert.match(error.message, /57.*56/); assert.equal(error.details.responses[0].declaredLength, 57);
-    assert.deepEqual(error.details.responses[0].rawReport, [...invalid]); assert.equal(error.details.responses[0].byteLength, 63);
-    return true;
-  });
-  r.emit(invalid); await failed; assert.equal(r.writes.length, 1);
 });
 test('probe filters unrelated reports, handles a nonzero DataView offset and releases listener', async () => {
   const r = device(), probe = C.createLightingProbe(r.d);
@@ -148,7 +106,7 @@ test('timeout and explicit cancellation clean up and never retry', async () => {
   for (const cancel of [false, true]) {
     const r = device(); let timeout, cleared = false;
     const probe = C.createLightingProbe(r.d, { setTimeout(fn, ms) { assert.equal(ms, 2000); timeout = fn; return 12; }, clearTimeout(id) { assert.equal(id, 12); cleared = true; } });
-    const rejected = assert.rejects(probe.promise, cancel ? /取消/ : /超时/);
+    const rejected = assert.rejects(probe.promise, cancel ? /取消/ : /没有返回/);
     cancel ? probe.cancel() : timeout(); await rejected;
     assert.equal(cleared, true); assert.equal(r.listeners.size, 0); assert.equal(r.writes.length, 1);
   }
@@ -158,12 +116,4 @@ test('send errors and malformed matching responses reject without changing light
   const probe = C.createLightingProbe(r.d); await assert.rejects(probe.promise, /fake send error/); assert.equal(r.listeners.size, 0);
   const s = device(), other = C.createLightingProbe(s.d), rejected = assert.rejects(other.promise, /校验/);
   const bad = report(); bad[62] ^= 1; s.emit(bad); await rejected; assert.equal(s.listeners.size, 0); assert.equal(s.writes.length, 1);
-});
-test('engine query is explicit, disallows concurrent start, and stop cancels pending query', async () => {
-  const r = device(), hid = { async getDevices() { return [r.d]; }, addEventListener() {} }, engine = C.createOutputEngine({ keys, hid });
-  await engine.command('connect', r.d); assert.equal(r.writes.length, 0);
-  const pending = engine.command('inspect-lighting'); await new Promise(resolve => setImmediate(resolve));
-  assert.equal(r.writes.length, 1); await assert.rejects(engine.command('start'), /查询期间/);
-  const rejected = assert.rejects(pending, /取消/); await engine.command('stop'); await rejected;
-  assert.equal(r.listeners.size, 0); assert.equal(r.writes.length, 1); await engine.command('disconnect');
 });

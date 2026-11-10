@@ -3,6 +3,7 @@ const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, protocol, 
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const P = require('./policy.cjs');
+const { createReactiveInput } = require('./reactive.cjs');
 
 // No public HTTP server, remote scripts, Node.js in the page, or security bypass.
 protocol.registerSchemesAsPrivileged([{ scheme: 'hero-light', privileges: {
@@ -13,6 +14,8 @@ const locked = app.requestSingleInstanceLock();
 if (!locked) app.quit();
 let win, tray, allowQuit = false, stopPromise = null, stopDone = null, showingPicker = false;
 let active = false, trayNoticeShown = false;
+let reactive = null, inputEnabled = false, inputNeeded = false,inputBackend='raw';
+function refreshInput() { reactive?.setContext({ enabled: inputEnabled, active: active && inputNeeded && !stopPromise && !allowQuit,backend:inputBackend }); }
 const iconPath = path.join(__dirname, 'assets', 'icon.png');
 
 function showWindow() {
@@ -20,9 +23,13 @@ function showWindow() {
   if (win.isMinimized()) win.restore();
   win.show(); win.focus();
 }
+function sendPreviewVisibility(){
+  if(!win||win.isDestroyed()||win.webContents.isDestroyed())return;
+  win.webContents.send('desktop:preview-visible',win.isVisible()&&!win.isMinimized());
+}
 function updateTray() {
   if (!tray) return;
-  tray.setToolTip('HERO 99HE · ' + (active ? '灯效正在后台运行' : '已就绪，尚未输出'));
+  tray.setToolTip('HERO 99HE v' + app.getVersion() + ' · ' + (active ? '灯效正在后台运行' : '已就绪，尚未输出'));
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开控制面板', click: showWindow },
     { label: active ? '停止灯效' : '停止输出', click: () => { void requestStop(); } },
@@ -31,6 +38,7 @@ function updateTray() {
   ]));
 }
 function requestStop() {
+  reactive?.setContext({enabled:inputEnabled,active:false,backend:inputBackend});
   if (stopPromise) return stopPromise;
   if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return Promise.resolve();
   stopPromise = new Promise(resolve => {
@@ -44,6 +52,7 @@ async function quitSafely() {
   if (allowQuit) return;
   await requestStop();
   allowQuit = true;
+  reactive?.dispose();
   tray?.destroy(); tray = null;
   // Closing the process also releases the OS HID handle, including a stalled
   // worker. No save/reset/recovery commands are emitted on exit.
@@ -101,7 +110,17 @@ async function main() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   win.webContents.on('will-attach-webview', event => event.preventDefault());
-  win.webContents.on('render-process-gone', () => { active = false; updateTray(); });
+  win.webContents.on('render-process-gone', () => { active = false; refreshInput(); updateTray(); });
+  reactive = createReactiveInput({
+    helperPath: app.isPackaged ? path.join(process.resourcesPath,'native','HeroKeyInput.exe') : path.join(__dirname,'native','HeroKeyInput.exe'),
+    isFocused: () => Boolean(win && !win.isDestroyed() && win.isFocused()),
+    onKey: value => { if(win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('desktop:key',value); },
+    onStatus: value => { if(win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('desktop:input-status',value); }
+  });
+  win.on('focus', () => reactive.reset());
+  // backgroundThrottling stays off for USB output; Chrome can therefore
+  // report "visible" even when the desktop window is hidden or minimized.
+  for(const event of ['show','hide','minimize','restore'])win.on(event,sendPreviewVisibility);
   win.on('close', event => {
     if (allowQuit) return;
     event.preventDefault(); win.hide();
@@ -112,8 +131,16 @@ async function main() {
   });
   tray = new Tray(nativeImage.createFromPath(iconPath));
   tray.on('double-click', showWindow); tray.on('click', showWindow); updateTray();
-  ipcMain.on('desktop:stopped', event => { if (event.sender === win?.webContents) { active = false; updateTray(); stopDone?.(); } });
-  ipcMain.on('desktop:running', (event, value) => { if (event.sender === win?.webContents) { active = value === true; updateTray(); } });
+  ipcMain.on('desktop:stopped', event => { if (event.sender === win?.webContents) { active = false; refreshInput(); updateTray(); stopDone?.(); } });
+  ipcMain.on('desktop:preview-ready',event=>{
+    if(event.sender===win?.webContents&&P.trustedOrigin(event.sender.getURL()))sendPreviewVisibility();
+  });
+  ipcMain.on('desktop:input-context', (event,value) => {
+    if(event.sender!==win?.webContents || !P.trustedOrigin(event.sender.getURL()))return;
+    const wasActive=active;
+    inputEnabled=value?.enabled===true;inputNeeded=value?.reactive===true;active=value?.running===true;inputBackend=value?.backend==='poll'?'poll':'raw';
+    refreshInput();if(wasActive!==active)updateTray();
+  });
   win.once('ready-to-show', showWindow);
   await win.loadURL(P.ENTRY);
 }

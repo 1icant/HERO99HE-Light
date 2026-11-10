@@ -9,12 +9,11 @@ importScripts('core.js');
     async open(){this.opened=true;},async close(){this.opened=false;},addEventListener(n,fn){listeners.add(fn);},removeEventListener(n,fn){listeners.delete(fn);},
     async sendReport(id,p){writes.push({time:performance.now(),command:p[0],index:p[4],count:p[3]});if(p[0]===130)for(const fn of listeners)fn({reportId:9,data:new DataView(caps.buffer)});}};
   const engine=HeroCore.createOutputEngine({keys:HeroKeys,hid:{async getDevices(){return[device];}},post:()=>{}});
-  const mode=new URL(location.href).searchParams.get('stripMode')||'follow';
-  if(!HeroCore.FRAME_STRIP_MODES.includes(mode))throw Error('Unsupported benchmark mode');
-  const project=HeroCore.defaultProject();project.settings.effect='wave';project.strip.mode=mode;
-  await engine.command('connect',device);await engine.command('inspect-lighting');
-  await engine.command('state',{project,selectedFrame:-1,events:[],heat:{},time:0});
-  const at=performance.now();await engine.command('start',{sideConsent:true});
+  const mode='breathe',project=HeroCore.defaultProject();project.settings.effect='wave';project.strip.mode=mode;
+  await engine.command('connect',device);
+  await engine.command('state',{project,selectedFrame:-1,time:0});
+  await engine.command('apply-light',{channel:'strip',consent:true});
+  const at=performance.now();await engine.command('start');
   await new Promise(resolve=>setTimeout(resolve,3000));await engine.command('stop');
   const starts=writes.filter(w=>w.command===8&&w.index===0),side=writes.filter(w=>w.command===4);
   const gaps=starts.slice(1).map((w,i)=>w.time-starts[i].time).sort((a,b)=>a-b);

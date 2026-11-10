@@ -113,7 +113,7 @@ test('brightness applies once; paint overlays non-studio effects only', () => {
   p.settings.brightness = 0; assert.ok(Object.values(C.render(p, keys, 0)).every(c => c.every(n => n === 0)));
 });
 test('projects round-trip and are defensively copied', () => {
-  const p = C.defaultProject(); p.paint[43] = [1, 2, 3]; p.frames.push(frame([4, 5, 6]));
+  const p = C.defaultProject(); p.paint[43] = [1, 2, 3]; p.frames.push(frame([4, 5, 6]));p.frameDurations=[100];
   const copy = C.validateProject(JSON.parse(JSON.stringify(p)), keys); assert.deepEqual(copy, p);
   copy.paint[43][0] = 255; assert.equal(p.paint[43][0], 1);
 });
@@ -123,6 +123,15 @@ test('unsafe or excessive imports fail before changing project', () => {
     assert.throws(() => C.validateProject(p, keys));
   }
   const malicious = JSON.parse('{"__proto__":[1,2,3]}'); const p = C.defaultProject(); p.paint = malicious; assert.throws(() => C.validateProject(p, keys));
+});
+
+test('variable frame durations select exact boundaries, speed and legacy migration correctly',()=>{
+  const p=C.defaultProject();p.settings.effect='studio';p.settings.brightness=1;p.frames=[frame([200,0,0]),frame([0,150,0])];p.frameDurations=[50,150];
+  for(const [t,index]of [[0,0],[0.049,0],[0.05,1],[0.199,1],[0.2,0]]){assert.equal(C.studioFrameAt(p,t),index);assert.deepEqual(C.render(p,keys,t)[1],p.frames[index][1]);}
+  p.settings.speed=2;assert.deepEqual(C.render(p,keys,0.025)[1],[0,150,0]);
+  assert.deepEqual(C.validateProject(JSON.parse(JSON.stringify(p)),keys).frameDurations,[50,150]);
+  delete p.frameDurations;p.frameMs=125;assert.deepEqual(C.validateProject(p,keys).frameDurations,[125,125]);
+  for(const durations of [[10,100],[100],[100,6000],[100,'150'],null]){p.frameDurations=durations;assert.throws(()=>C.validateProject(p,keys),/逐帧时长/);}
 });
 test('working static, breathing and meteor frames keep exact original RGB and packets', () => {
   const p = C.defaultProject();

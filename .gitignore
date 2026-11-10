@@ -6,6 +6,9 @@ work/
 .DS_Store
 Thumbs.db
 HERO99HE-diagnostics*.json
+KSL.json
+后台按键响应.json
 HERO99HE-light.json
+native/*.exe
 HERO99HE-Light-Studio-*-win-x64/
 HERO99HE-Light-Studio-*-win-x64.zip
